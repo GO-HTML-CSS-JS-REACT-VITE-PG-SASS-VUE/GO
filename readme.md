@@ -2316,3 +2316,1669 @@ func main() {
     
     fmt.Println("Все миграции применены успешно")
 }
+Задание: Система миграций базы данных
+
+80. REST API сервер
+go
+package main
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "strconv"
+    
+    "github.com/gorilla/mux"
+)
+
+type User struct {
+    ID    int    `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
+
+var users = []User{
+    {ID: 1, Name: "Alice", Email: "alice@example.com"},
+    {ID: 2, Name: "Bob", Email: "bob@example.com"},
+}
+var nextID = 3
+
+func getUsers(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(users)
+}
+
+func getUser(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    params := mux.Vars(r)
+    id, _ := strconv.Atoi(params["id"])
+    
+    for _, user := range users {
+        if user.ID == id {
+            json.NewEncoder(w).Encode(user)
+            return
+        }
+    }
+    http.Error(w, "User not found", http.StatusNotFound)
+}
+
+func createUser(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    var user User
+    json.NewDecoder(r.Body).Decode(&user)
+    
+    user.ID = nextID
+    nextID++
+    users = append(users, user)
+    
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(user)
+}
+
+func updateUser(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    params := mux.Vars(r)
+    id, _ := strconv.Atoi(params["id"])
+    
+    var updatedUser User
+    json.NewDecoder(r.Body).Decode(&updatedUser)
+    
+    for i, user := range users {
+        if user.ID == id {
+            updatedUser.ID = id
+            users[i] = updatedUser
+            json.NewEncoder(w).Encode(updatedUser)
+            return
+        }
+    }
+    http.Error(w, "User not found", http.StatusNotFound)
+}
+
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+    params := mux.Vars(r)
+    id, _ := strconv.Atoi(params["id"])
+    
+    for i, user := range users {
+        if user.ID == id {
+            users = append(users[:i], users[i+1:]...)
+            w.WriteHeader(http.StatusNoContent)
+            return
+        }
+    }
+    http.Error(w, "User not found", http.StatusNotFound)
+}
+
+func main() {
+    r := mux.NewRouter()
+    
+    r.HandleFunc("/users", getUsers).Methods("GET")
+    r.HandleFunc("/users/{id}", getUser).Methods("GET")
+    r.HandleFunc("/users", createUser).Methods("POST")
+    r.HandleFunc("/users/{id}", updateUser).Methods("PUT")
+    r.HandleFunc("/users/{id}", deleteUser).Methods("DELETE")
+    
+    fmt.Println("REST API сервер запущен на :8080")
+    log.Fatal(http.ListenAndServe(":8080", r))
+}
+Задание: Создание REST API сервера
+
+81. JWT аутентификация
+go
+package main
+import (
+    "fmt"
+    "net/http"
+    "time"
+    
+    "github.com/dgrijalva/jwt-go"
+    "github.com/gorilla/mux"
+)
+
+var jwtKey = []byte("my_secret_key")
+
+type Claims struct {
+    Username string `json:"username"`
+    jwt.StandardClaims
+}
+
+func login(w http.ResponseWriter, r *http.Request) {
+    var credentials struct {
+        Username string `json:"username"`
+        Password string `json:"password"`
+    }
+    
+    if err := json.NewDecoder(r.Body).Decode(&credentials); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+    
+    // Простая проверка (в реальном приложении использовать базу данных)
+    if credentials.Username != "admin" || credentials.Password != "password" {
+        http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+        return
+    }
+    
+    expirationTime := time.Now().Add(24 * time.Hour)
+    claims := &Claims{
+        Username: credentials.Username,
+        StandardClaims: jwt.StandardClaims{
+            ExpiresAt: expirationTime.Unix(),
+        },
+    }
+    
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    tokenString, err := token.SignedString(jwtKey)
+    if err != nil {
+        http.Error(w, "Error creating token", http.StatusInternalServerError)
+        return
+    }
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{
+        "token": tokenString,
+    })
+}
+
+func protectedHandler(w http.ResponseWriter, r *http.Request) {
+    tokenString := r.Header.Get("Authorization")
+    if tokenString == "" {
+        http.Error(w, "Missing token", http.StatusUnauthorized)
+        return
+    }
+    
+    claims := &Claims{}
+    token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+        return jwtKey, nil
+    })
+    
+    if err != nil || !token.Valid {
+        http.Error(w, "Invalid token", http.StatusUnauthorized)
+        return
+    }
+    
+    w.Write([]byte(fmt.Sprintf("Hello %s!", claims.Username)))
+}
+
+func main() {
+    r := mux.NewRouter()
+    r.HandleFunc("/login", login).Methods("POST")
+    r.HandleFunc("/protected", protectedHandler).Methods("GET")
+    
+    fmt.Println("JWT сервер запущен на :8080")
+    http.ListenAndServe(":8080", r)
+}
+Задание: JWT аутентификация в REST API
+
+82. Graceful shutdown
+go
+package main
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+)
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+        time.Sleep(5 * time.Second) // Долгая операция
+        fmt.Fprintf(w, "Hello World!")
+    })
+    
+    server := &http.Server{
+        Addr:    ":8080",
+        Handler: mux,
+    }
+    
+    // Запуск сервера в горутине
+    go func() {
+        fmt.Println("Сервер запущен на :8080")
+        if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+            log.Fatalf("Ошибка сервера: %v", err)
+        }
+    }()
+    
+    // Ожидание сигналов завершения
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+    fmt.Println("\nЗавершение сервера...")
+    
+    // Graceful shutdown
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    
+    if err := server.Shutdown(ctx); err != nil {
+        log.Fatalf("Принудительное завершение: %v", err)
+    }
+    
+    fmt.Println("Сервер остановлен")
+}
+Задание: Graceful shutdown сервера
+
+83. Пул соединений
+go
+package main
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+type Connection struct {
+    ID   int
+    Open bool
+}
+
+type ConnectionPool struct {
+    mu          sync.Mutex
+    connections []*Connection
+    maxSize     int
+}
+
+func NewConnectionPool(maxSize int) *ConnectionPool {
+    return &ConnectionPool{
+        connections: make([]*Connection, 0, maxSize),
+        maxSize:     maxSize,
+    }
+}
+
+func (p *ConnectionPool) Get() (*Connection, error) {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    
+    // Поиск свободного соединения
+    for _, conn := range p.connections {
+        if conn.Open {
+            conn.Open = false
+            return conn, nil
+        }
+    }
+    
+    // Создание нового соединения
+    if len(p.connections) < p.maxSize {
+        conn := &Connection{
+            ID:   len(p.connections) + 1,
+            Open: false,
+        }
+        p.connections = append(p.connections, conn)
+        fmt.Printf("Создано новое соединение %d\n", conn.ID)
+        return conn, nil
+    }
+    
+    return nil, fmt.Errorf("пул переполнен")
+}
+
+func (p *ConnectionPool) Release(conn *Connection) {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    conn.Open = true
+}
+
+func (p *ConnectionPool) Stats() {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    
+    openCount := 0
+    for _, conn := range p.connections {
+        if conn.Open {
+            openCount++
+        }
+    }
+    
+    fmt.Printf("Всего: %d, Свободных: %d, Занятых: %d\n", 
+        len(p.connections), openCount, len(p.connections)-openCount)
+}
+
+func main() {
+    pool := NewConnectionPool(3)
+    
+    var wg sync.WaitGroup
+    for i := 0; i < 10; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            
+            conn, err := pool.Get()
+            if err != nil {
+                fmt.Printf("Горутина %d: %v\n", id, err)
+                return
+            }
+            
+            fmt.Printf("Горутина %d использует соединение %d\n", id, conn.ID)
+            time.Sleep(time.Second)
+            pool.Release(conn)
+            fmt.Printf("Горутина %d освободила соединение %d\n", id, conn.ID)
+        }(i)
+    }
+    
+    wg.Wait()
+    pool.Stats()
+}
+Задание: Реализация пула соединений
+
+84. Кэширование
+go
+package main
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+type CacheItem struct {
+    Value      interface{}
+    Expiration int64
+}
+
+type Cache struct {
+    items map[string]CacheItem
+    mu    sync.RWMutex
+}
+
+func NewCache() *Cache {
+    cache := &Cache{
+        items: make(map[string]CacheItem),
+    }
+    go cache.cleanup()
+    return cache
+}
+
+func (c *Cache) Set(key string, value interface{}, duration time.Duration) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    
+    expiration := time.Now().Add(duration).UnixNano()
+    c.items[key] = CacheItem{
+        Value:      value,
+        Expiration: expiration,
+    }
+}
+
+func (c *Cache) Get(key string) (interface{}, bool) {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    
+    item, found := c.items[key]
+    if !found {
+        return nil, false
+    }
+    
+    if time.Now().UnixNano() > item.Expiration {
+        return nil, false
+    }
+    
+    return item.Value, true
+}
+
+func (c *Cache) cleanup() {
+    ticker := time.NewTicker(time.Minute)
+    defer ticker.Stop()
+    
+    for range ticker.C {
+        c.mu.Lock()
+        now := time.Now().UnixNano()
+        for key, item := range c.items {
+            if now > item.Expiration {
+                delete(c.items, key)
+            }
+        }
+        c.mu.Unlock()
+    }
+}
+
+func main() {
+    cache := NewCache()
+    
+    // Сохранение данных с TTL
+    cache.Set("user:1", "Alice", 5*time.Second)
+    cache.Set("config:timeout", 30, 10*time.Second)
+    
+    // Получение данных
+    if value, found := cache.Get("user:1"); found {
+        fmt.Println("Найден пользователь:", value)
+    }
+    
+    // Ожидание истечения TTL
+    time.Sleep(6 * time.Second)
+    if value, found := cache.Get("user:1"); !found {
+        fmt.Println("Данные истекли")
+    } else {
+        fmt.Println("Пользователь:", value)
+    }
+}
+Задание: Реализация TTL кэша
+
+85. Rate limiting
+go
+package main
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+type RateLimiter struct {
+    mu       sync.Mutex
+    requests map[string][]time.Time
+    limit    int
+    window   time.Duration
+}
+
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+    return &RateLimiter{
+        requests: make(map[string][]time.Time),
+        limit:    limit,
+        window:   window,
+    }
+}
+
+func (rl *RateLimiter) Allow(identifier string) bool {
+    rl.mu.Lock()
+    defer rl.mu.Unlock()
+    
+    now := time.Now()
+    
+    // Очистка старых запросов
+    if _, exists := rl.requests[identifier]; !exists {
+        rl.requests[identifier] = make([]time.Time, 0)
+    }
+    
+    validRequests := make([]time.Time, 0)
+    for _, t := range rl.requests[identifier] {
+        if now.Sub(t) <= rl.window {
+            validRequests = append(validRequests, t)
+        }
+    }
+    
+    rl.requests[identifier] = validRequests
+    
+    // Проверка лимита
+    if len(rl.requests[identifier]) >= rl.limit {
+        return false
+    }
+    
+    rl.requests[identifier] = append(rl.requests[identifier], now)
+    return true
+}
+
+func main() {
+    limiter := NewRateLimiter(5, time.Minute) // 5 запросов в минуту
+    
+    var wg sync.WaitGroup
+    for i := 0; i < 10; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            
+            if limiter.Allow("user123") {
+                fmt.Printf("Запрос %d: Разрешено\n", id)
+            } else {
+                fmt.Printf("Запрос %d: Отклонено (превышен лимит)\n", id)
+            }
+        }(i)
+        time.Sleep(100 * time.Millisecond)
+    }
+    wg.Wait()
+}
+Задание: Реализация rate limiting
+
+86. Конфигурационные файлы
+go
+package main
+import (
+    "encoding/json"
+    "fmt"
+    "io"
+    "os"
+)
+
+type Config struct {
+    Server   ServerConfig   `json:"server"`
+    Database DatabaseConfig `json:"database"`
+    Logging  LoggingConfig  `json:"logging"`
+}
+
+type ServerConfig struct {
+    Host string `json:"host"`
+    Port int    `json:"port"`
+}
+
+type DatabaseConfig struct {
+    Host     string `json:"host"`
+    Port     int    `json:"port"`
+    Name     string `json:"name"`
+    User     string `json:"user"`
+    Password string `json:"password"`
+}
+
+type LoggingConfig struct {
+    Level string `json:"level"`
+    File  string `json:"file"`
+}
+
+func LoadConfig(filename string) (*Config, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+    
+    data, err := io.ReadAll(file)
+    if err != nil {
+        return nil, err
+    }
+    
+    var config Config
+    err = json.Unmarshal(data, &config)
+    if err != nil {
+        return nil, err
+    }
+    
+    return &config, nil
+}
+
+func SaveConfig(filename string, config *Config) error {
+    data, err := json.MarshalIndent(config, "", "  ")
+    if err != nil {
+        return err
+    }
+    
+    return os.WriteFile(filename, data, 0644)
+}
+
+func main() {
+    // Создание конфигурации по умолчанию
+    defaultConfig := &Config{
+        Server: ServerConfig{
+            Host: "localhost",
+            Port: 8080,
+        },
+        Database: DatabaseConfig{
+            Host:     "localhost",
+            Port:     5432,
+            Name:     "myapp",
+            User:     "admin",
+            Password: "secret",
+        },
+        Logging: LoggingConfig{
+            Level: "info",
+            File:  "app.log",
+        },
+    }
+    
+    // Сохранение конфигурации
+    err := SaveConfig("config.json", defaultConfig)
+    if err != nil {
+        fmt.Println("Ошибка сохранения:", err)
+        return
+    }
+    
+    // Загрузка конфигурации
+    config, err := LoadConfig("config.json")
+    if err != nil {
+        fmt.Println("Ошибка загрузки:", err)
+        return
+    }
+    
+    fmt.Printf("Загруженная конфигурация: %+v\n", config)
+}
+Задание: Работа с конфигурационными файлами
+
+87. Health check
+go
+package main
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "sync"
+    "time"
+)
+
+type HealthStatus struct {
+    Status    string            `json:"status"`
+    Timestamp time.Time         `json:"timestamp"`
+    Checks    map[string]string `json:"checks"`
+}
+
+type HealthChecker struct {
+    mu      sync.RWMutex
+    checks  map[string]func() error
+    status  HealthStatus
+}
+
+func NewHealthChecker() *HealthChecker {
+    hc := &HealthChecker{
+        checks: make(map[string]func() error),
+        status: HealthStatus{
+            Checks: make(map[string]string),
+        },
+    }
+    
+    go hc.monitor()
+    return hc
+}
+
+func (hc *HealthChecker) AddCheck(name string, check func() error) {
+    hc.mu.Lock()
+    defer hc.mu.Unlock()
+    hc.checks[name] = check
+}
+
+func (hc *HealthChecker) monitor() {
+    ticker := time.NewTicker(30 * time.Second)
+    defer ticker.Stop()
+    
+    for range ticker.C {
+        hc.performChecks()
+    }
+}
+
+func (hc *HealthChecker) performChecks() {
+    hc.mu.Lock()
+    defer hc.mu.Unlock()
+    
+    overallStatus := "healthy"
+    hc.status.Timestamp = time.Now()
+    
+    for name, check := range hc.checks {
+        if err := check(); err != nil {
+            hc.status.Checks[name] = err.Error()
+            overallStatus = "unhealthy"
+        } else {
+            hc.status.Checks[name] = "ok"
+        }
+    }
+    
+    hc.status.Status = overallStatus
+}
+
+func (hc *HealthChecker) HealthHandler(w http.ResponseWriter, r *http.Request) {
+    hc.mu.RLock()
+    defer hc.mu.RUnlock()
+    
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(hc.status)
+}
+
+func main() {
+    healthChecker := NewHealthChecker()
+    
+    // Добавление проверок
+    healthChecker.AddCheck("database", func() error {
+        // Здесь должна быть реальная проверка БД
+        return nil
+    })
+    
+    healthChecker.AddCheck("external_api", func() error {
+        // Проверка внешнего API
+        return nil
+    })
+    
+    http.HandleFunc("/health", healthChecker.HealthHandler)
+    fmt.Println("Health check сервер запущен на :8080")
+    http.ListenAndServe(":8080", nil)
+}
+Задание: Система health check для мониторинга
+
+88. Метрики Prometheus
+go
+package main
+import (
+    "fmt"
+    "net/http"
+    "time"
+    
+    "github.com/prometheus/client_golang/prometheus"
+    "github.com/prometheus/client_golang/prometheus/promauto"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+var (
+    requestsTotal = promauto.NewCounterVec(
+        prometheus.CounterOpts{
+            Name: "http_requests_total",
+            Help: "Total number of HTTP requests",
+        },
+        []string{"method", "path", "status"},
+    )
+    
+    requestDuration = promauto.NewHistogramVec(
+        prometheus.HistogramOpts{
+            Name:    "http_request_duration_seconds",
+            Help:    "Duration of HTTP requests",
+            Buckets: prometheus.DefBuckets,
+        },
+        []string{"method", "path"},
+    )
+    
+    activeRequests = promauto.NewGauge(
+        prometheus.GaugeOpts{
+            Name: "http_active_requests",
+            Help: "Number of active HTTP requests",
+        },
+    )
+)
+
+func metricsMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        activeRequests.Inc()
+        
+        // Создание ResponseWriter для перехвата статуса
+        rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+        
+        next.ServeHTTP(rw, r)
+        
+        duration := time.Since(start).Seconds()
+        requestsTotal.WithLabelValues(r.Method, r.URL.Path, fmt.Sprintf("%d", rw.statusCode)).Inc()
+        requestDuration.WithLabelValues(r.Method, r.URL.Path).Observe(duration)
+        activeRequests.Dec()
+    })
+}
+
+type responseWriter struct {
+    http.ResponseWriter
+    statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+    rw.statusCode = code
+    rw.ResponseWriter.WriteHeader(code)
+}
+
+func helloHandler(w http.ResponseWriter, r *http.Request) {
+    time.Sleep(100 * time.Millisecond) // Имитация работы
+    w.Write([]byte("Hello World!"))
+}
+
+func main() {
+    mux := http.NewServeMux()
+    mux.Handle("/metrics", promhttp.Handler())
+    mux.Handle("/hello", metricsMiddleware(http.HandlerFunc(helloHandler)))
+    
+    fmt.Println("Сервер метрик запущен на :8080")
+    http.ListenAndServe(":8080", mux)
+}
+Задание: Интеграция с Prometheus для сбора метрик
+
+89. Трассировка (Tracing)
+go
+package main
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+    
+    "go.opentelemetry.io/otel"
+    "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+    "go.opentelemetry.io/otel/sdk/resource"
+    sdktrace "go.opentelemetry.io/otel/sdk/trace"
+    "go.opentelemetry.io/otel/trace"
+)
+
+var tracer trace.Tracer
+
+func initTracer() (*sdktrace.TracerProvider, error) {
+    exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+    if err != nil {
+        return nil, err
+    }
+    
+    tp := sdktrace.NewTracerProvider(
+        sdktrace.WithBatcher(exporter),
+        sdktrace.WithResource(resource.NewWithAttributes(
+            "service.name", "my-service",
+        )),
+    )
+    
+    otel.SetTracerProvider(tp)
+    tracer = tp.Tracer("example-tracer")
+    return tp, nil
+}
+
+func processOrder(ctx context.Context, orderID string) {
+    ctx, span := tracer.Start(ctx, "processOrder")
+    defer span.End()
+    
+    // Имитация работы
+    time.Sleep(100 * time.Millisecond)
+    validatePayment(ctx, orderID)
+    updateInventory(ctx, orderID)
+}
+
+func validatePayment(ctx context.Context, orderID string) {
+    ctx, span := tracer.Start(ctx, "validatePayment")
+    defer span.End()
+    
+    time.Sleep(50 * time.Millisecond)
+}
+
+func updateInventory(ctx context.Context, orderID string) {
+    ctx, span := tracer.Start(ctx, "updateInventory")
+    defer span.End()
+    
+    time.Sleep(75 * time.Millisecond)
+}
+
+func orderHandler(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+    
+    // Создание корневого span
+    ctx, span := tracer.Start(ctx, "orderHandler")
+    defer span.End()
+    
+    orderID := "12345"
+    processOrder(ctx, orderID)
+    
+    w.Write([]byte(fmt.Sprintf("Order %s processed", orderID)))
+}
+
+func main() {
+    tp, err := initTracer()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer tp.Shutdown(context.Background())
+    
+    http.HandleFunc("/order", orderHandler)
+    fmt.Println("Сервер с трассировкой запущен на :8080")
+    http.ListenAndServe(":8080", nil)
+}
+Задание: Инструментирование приложения с трассировкой
+
+90. Feature flags
+go
+package main
+import (
+    "encoding/json"
+    "fmt"
+    "sync"
+    "time"
+)
+
+type FeatureFlag struct {
+    Name        string    `json:"name"`
+    Enabled     bool      `json:"enabled"`
+    Description string    `json:"description"`
+    UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type FeatureManager struct {
+    mu     sync.RWMutex
+    flags  map[string]*FeatureFlag
+    config string
+}
+
+func NewFeatureManager() *FeatureManager {
+    fm := &FeatureManager{
+        flags: make(map[string]*FeatureFlag),
+    }
+    
+    // Загрузка флагов по умолчанию
+    fm.flags["new_ui"] = &FeatureFlag{
+        Name:        "new_ui",
+        Enabled:     false,
+        Description: "Новый пользовательский интерфейс",
+        UpdatedAt:   time.Now(),
+    }
+    
+    fm.flags["beta_features"] = &FeatureFlag{
+        Name:        "beta_features",
+        Enabled:     true,
+        Description: "Бета-функциональность",
+        UpdatedAt:   time.Now(),
+    }
+    
+    return fm
+}
+
+func (fm *FeatureManager) IsEnabled(flagName string) bool {
+    fm.mu.RLock()
+    defer fm.mu.RUnlock()
+    
+    if flag, exists := fm.flags[flagName]; exists {
+        return flag.Enabled
+    }
+    return false
+}
+
+func (fm *FeatureManager) SetFlag(flagName string, enabled bool) {
+    fm.mu.Lock()
+    defer fm.mu.Unlock()
+    
+    if flag, exists := fm.flags[flagName]; exists {
+        flag.Enabled = enabled
+        flag.UpdatedAt = time.Now()
+    } else {
+        fm.flags[flagName] = &FeatureFlag{
+            Name:      flagName,
+            Enabled:   enabled,
+            UpdatedAt: time.Now(),
+        }
+    }
+}
+
+func (fm *FeatureManager) GetFlags() map[string]*FeatureFlag {
+    fm.mu.RLock()
+    defer fm.mu.RUnlock()
+    
+    flags := make(map[string]*FeatureFlag)
+    for k, v := range fm.flags {
+        flags[k] = v
+    }
+    return flags
+}
+
+func (fm *FeatureManager) SaveToFile(filename string) error {
+    fm.mu.RLock()
+    defer fm.mu.RUnlock()
+    
+    data, err := json.MarshalIndent(fm.flags, "", "  ")
+    if err != nil {
+        return err
+    }
+    
+    // В реальном приложении сохранить в файл
+    fm.config = string(data)
+    return nil
+}
+
+func main() {
+    featureManager := NewFeatureManager()
+    
+    // Проверка флагов
+    fmt.Println("New UI enabled:", featureManager.IsEnabled("new_ui"))
+    fmt.Println("Beta features enabled:", featureManager.IsEnabled("beta_features"))
+    
+    // Включение флага
+    featureManager.SetFlag("new_ui", true)
+    fmt.Println("New UI after enable:", featureManager.IsEnabled("new_ui"))
+    
+    // Получение всех флагов
+    flags := featureManager.GetFlags()
+    for name, flag := range flags {
+        fmt.Printf("%s: %t\n", name, flag.Enabled)
+    }
+}
+Задание: Система feature flags для управления функциональностью
+
+91. Работа с большими файлами
+go
+package main
+import (
+    "bufio"
+    "fmt"
+    "os"
+    "sort"
+    "strings"
+    "sync"
+)
+
+type WordCount struct {
+    Word  string
+    Count int
+}
+
+func countWords(filename string) (map[string]int, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+    
+    wordCounts := make(map[string]int)
+    scanner := bufio.NewScanner(file)
+    scanner.Split(bufio.ScanWords)
+    
+    for scanner.Scan() {
+        word := strings.ToLower(scanner.Text())
+        word = strings.Trim(word, ".,!?;:\"()[]{}")
+        if word != "" {
+            wordCounts[word]++
+        }
+    }
+    
+    return wordCounts, scanner.Err()
+}
+
+func processLargeFile(filename string, batchSize int) ([]WordCount, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+    
+    var mu sync.Mutex
+    var wg sync.WaitGroup
+    wordCounts := make(map[string]int)
+    
+    scanner := bufio.NewScanner(file)
+    lines := make([]string, 0, batchSize)
+    
+    for scanner.Scan() {
+        lines = append(lines, scanner.Text())
+        
+        if len(lines) >= batchSize {
+            wg.Add(1)
+            batch := make([]string, len(lines))
+            copy(batch, lines)
+            lines = lines[:0]
+            
+            go func(batch []string) {
+                defer wg.Done()
+                batchCounts := make(map[string]int)
+                
+                for _, line := range batch {
+                    words := strings.Fields(line)
+                    for _, word := range words {
+                        cleanWord := strings.ToLower(strings.Trim(word, ".,!?;:\"()[]{}"))
+                        if cleanWord != "" {
+                            batchCounts[cleanWord]++
+                        }
+                    }
+                }
+                
+                mu.Lock()
+                for word, count := range batchCounts {
+                    wordCounts[word] += count
+                }
+                mu.Unlock()
+            }(batch)
+        }
+    }
+    
+    // Обработка оставшихся строк
+    if len(lines) > 0 {
+        batchCounts := make(map[string]int)
+        for _, line := range lines {
+            words := strings.Fields(line)
+            for _, word := range words {
+                cleanWord := strings.ToLower(strings.Trim(word, ".,!?;:\"()[]{}"))
+                if cleanWord != "" {
+                    batchCounts[cleanWord]++
+                }
+            }
+        }
+        
+        mu.Lock()
+        for word, count := range batchCounts {
+            wordCounts[word] += count
+        }
+        mu.Unlock()
+    }
+    
+    wg.Wait()
+    
+    // Преобразование в слайс и сортировка
+    var result []WordCount
+    for word, count := range wordCounts {
+        result = append(result, WordCount{Word: word, Count: count})
+    }
+    
+    sort.Slice(result, func(i, j int) bool {
+        return result[i].Count > result[j].Count
+    })
+    
+    return result, nil
+}
+
+func main() {
+    // Создание тестового файла
+    content := "Hello world hello Go world Go programming language Go is awesome"
+    os.WriteFile("test.txt", []byte(content), 0644)
+    
+    // Простой подсчет
+    counts, err := countWords("test.txt")
+    if err != nil {
+        fmt.Println("Ошибка:", err)
+        return
+    }
+    
+    fmt.Println("Подсчет слов:")
+    for word, count := range counts {
+        fmt.Printf("%s: %d\n", word, count)
+    }
+    
+    // Параллельная обработка (для больших файлов)
+    fmt.Println("\nТоп слов:")
+    topWords, err := processLargeFile("test.txt", 2)
+    if err != nil {
+        fmt.Println("Ошибка:", err)
+        return
+    }
+    
+    for i, wc := range topWords {
+        if i >= 5 { // Показать топ-5
+            break
+        }
+        fmt.Printf("%s: %d\n", wc.Word, wc.Count)
+    }
+}
+Задание: Эффективная обработка больших файлов
+
+92. Парсинг аргументов с cobra
+go
+package main
+import (
+    "fmt"
+    "github.com/spf13/cobra"
+    "os"
+)
+
+var rootCmd = &cobra.Command{
+    Use:   "myapp",
+    Short: "Мое приложение",
+    Long:  "Длинное описание моего приложения",
+    Run: func(cmd *cobra.Command, args []string) {
+        fmt.Println("Запуск основного приложения")
+    },
+}
+
+var versionCmd = &cobra.Command{
+    Use:   "version",
+    Short: "Версия приложения",
+    Run: func(cmd *cobra.Command, args []string) {
+        fmt.Println("MyApp v1.0.0")
+    },
+}
+
+var serveCmd = &cobra.Command{
+    Use:   "serve",
+    Short: "Запуск сервера",
+    Run: func(cmd *cobra.Command, args []string) {
+        host, _ := cmd.Flags().GetString("host")
+        port, _ := cmd.Flags().GetInt("port")
+        fmt.Printf("Запуск сервера на %s:%d\n", host, port)
+    },
+}
+
+func init() {
+    serveCmd.Flags().StringP("host", "H", "localhost", "Хост сервера")
+    serveCmd.Flags().IntP("port", "p", 8080, "Порт сервера")
+    
+    rootCmd.AddCommand(versionCmd)
+    rootCmd.AddCommand(serveCmd)
+}
+
+func main() {
+    if err := rootCmd.Execute(); err != nil {
+        fmt.Println(err)
+        os.Exit(1)
+    }
+}
+Задание: Создание CLI приложения с cobra
+
+93. Генерация документации
+go
+package main
+import "fmt"
+
+// Calculator предоставляет базовые математические операции
+type Calculator struct{}
+
+// NewCalculator создает новый экземпляр калькулятора
+func NewCalculator() *Calculator {
+    return &Calculator{}
+}
+
+// Add возвращает сумму двух чисел
+// Пример: Add(2, 3) возвращает 5
+func (c *Calculator) Add(a, b int) int {
+    return a + b
+}
+
+// Subtract возвращает разность двух чисел
+// Пример: Subtract(5, 3) возвращает 2
+func (c *Calculator) Subtract(a, b int) int {
+    return a - b
+}
+
+// Multiply возвращает произведение двух чисел
+// Пример: Multiply(2, 3) возвращает 6
+func (c *Calculator) Multiply(a, b int) int {
+    return a * b
+}
+
+// Divide возвращает результат деления a на b
+// Если b == 0, возвращает ошибку
+// Пример: Divide(6, 3) возвращает 2
+func (c *Calculator) Divide(a, b int) (int, error) {
+    if b == 0 {
+        return 0, fmt.Errorf("деление на ноль")
+    }
+    return a / b, nil
+}
+
+// Power возвращает a в степени b
+// Пример: Power(2, 3) возвращает 8
+func (c *Calculator) Power(a, b int) int {
+    result := 1
+    for i := 0; i < b; i++ {
+        result *= a
+    }
+    return result
+}
+
+// IsEven проверяет, является ли число четным
+// Пример: IsEven(4) возвращает true
+func (c *Calculator) IsEven(n int) bool {
+    return n%2 == 0
+}
+
+// Fibonacci возвращает n-ное число Фибоначчи
+// Пример: Fibonacci(6) возвращает 8
+func (c *Calculator) Fibonacci(n int) int {
+    if n <= 1 {
+        return n
+    }
+    a, b := 0, 1
+    for i := 2; i <= n; i++ {
+        a, b = b, a+b
+    }
+    return b
+}
+
+func main() {
+    calc := NewCalculator()
+    
+    fmt.Println("Сложение:", calc.Add(5, 3))
+    fmt.Println("Вычитание:", calc.Subtract(5, 3))
+    fmt.Println("Умножение:", calc.Multiply(5, 3))
+    
+    result, err := calc.Divide(6, 3)
+    if err != nil {
+        fmt.Println("Ошибка деления:", err)
+    } else {
+        fmt.Println("Деление:", result)
+    }
+    
+    fmt.Println("Степень:", calc.Power(2, 3))
+    fmt.Println("Четное:", calc.IsEven(4))
+    fmt.Println("Фибоначчи:", calc.Fibonacci(6))
+}
+Задание: Документирование кода с примерами
+
+94. Benchmark тесты
+go
+package main
+import (
+    "crypto/sha256"
+    "testing"
+)
+
+// Функция для бенчмарка
+func calculateSHA256(data []byte) [32]byte {
+    return sha256.Sum256(data)
+}
+
+// Функция для бенчмарка - конкатенация строк
+func concatenateStrings(strings []string) string {
+    var result string
+    for _, s := range strings {
+        result += s
+    }
+    return result
+}
+
+// Функция для бенчмарка - эффективная конкатенация
+func concatenateStringsBuilder(strings []string) string {
+    var builder strings.Builder
+    for _, s := range strings {
+        builder.WriteString(s)
+    }
+    return builder.String()
+}
+
+// Бенчмарк тесты
+func BenchmarkSHA256(b *testing.B) {
+    data := []byte("test data for benchmarking")
+    for i := 0; i < b.N; i++ {
+        calculateSHA256(data)
+    }
+}
+
+func BenchmarkConcatenateStrings(b *testing.B) {
+    testStrings := []string{"hello", "world", "golang", "benchmark", "testing"}
+    for i := 0; i < b.N; i++ {
+        concatenateStrings(testStrings)
+    }
+}
+
+func BenchmarkConcatenateStringsBuilder(b *testing.B) {
+    testStrings := []string{"hello", "world", "golang", "benchmark", "testing"}
+    for i := 0; i < b.N; i++ {
+        concatenateStringsBuilder(testStrings)
+    }
+}
+
+func BenchmarkMapAccess(b *testing.B) {
+    m := make(map[int]string)
+    for i := 0; i < 1000; i++ {
+        m[i] = fmt.Sprintf("value%d", i)
+    }
+    
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _ = m[i%1000]
+    }
+}
+
+func BenchmarkSliceAccess(b *testing.B) {
+    slice := make([]string, 1000)
+    for i := 0; i < 1000; i++ {
+        slice[i] = fmt.Sprintf("value%d", i)
+    }
+    
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _ = slice[i%1000]
+    }
+}
+
+// Пример запуска: go test -bench=. -benchmem
+Задание: Написание benchmark тестов для измерения производительности
+
+95. Table-driven тесты
+go
+package main
+import (
+    "testing"
+)
+
+// Функции для тестирования
+func Add(a, b int) int {
+    return a + b
+}
+
+func Subtract(a, b int) int {
+    return a - b
+}
+
+func Multiply(a, b int) int {
+    return a * b
+}
+
+func Divide(a, b int) (int, error) {
+    if b == 0 {
+        return 0, fmt.Errorf("деление на ноль")
+    }
+    return a / b, nil
+}
+
+// Table-driven тесты для Add
+func TestAdd(t *testing.T) {
+    tests := []struct {
+        name     string
+        a        int
+        b        int
+        expected int
+    }{
+        {"positive numbers", 2, 3, 5},
+        {"negative numbers", -2, -3, -5},
+        {"mixed signs", -2, 3, 1},
+        {"zero", 0, 5, 5},
+        {"both zero", 0, 0, 0},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := Add(tt.a, tt.b)
+            if result != tt.expected {
+                t.Errorf("Add(%d, %d) = %d; expected %d", tt.a, tt.b, result, tt.expected)
+            }
+        })
+    }
+}
+
+// Table-driven тесты для Subtract
+func TestSubtract(t *testing.T) {
+    tests := []struct {
+        name     string
+        a        int
+        b        int
+        expected int
+    }{
+        {"positive result", 5, 3, 2},
+        {"negative result", 3, 5, -2},
+        {"zero result", 5, 5, 0},
+        {"negative numbers", -2, -3, 1},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := Subtract(tt.a, tt.b)
+            if result != tt.expected {
+                t.Errorf("Subtract(%d, %d) = %d; expected %d", tt.a, tt.b, result, tt.expected)
+            }
+        })
+    }
+}
+
+// Table-driven тесты для Multiply
+func TestMultiply(t *testing.T) {
+    tests := []struct {
+        name     string
+        a        int
+        b        int
+        expected int
+    }{
+        {"positive numbers", 2, 3, 6},
+        {"with zero", 5, 0, 0},
+        {"negative numbers", -2, 3, -6},
+        {"both negative", -2, -3, 6},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := Multiply(tt.a, tt.b)
+            if result != tt.expected {
+                t.Errorf("Multiply(%d, %d) = %d; expected %d", tt.a, tt.b, result, tt.expected)
+            }
+        })
+    }
+}
+
+// Table-driven тесты для Divide
+func TestDivide(t *testing.T) {
+    tests := []struct {
+        name        string
+        a           int
+        b           int
+        expected    int
+        expectError bool
+    }{
+        {"normal division", 6, 3, 2, false},
+        {"division by zero", 5, 0, 0, true},
+        {"fraction result", 5, 2, 2, false},
+        {"negative division", -6, 3, -2, false},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result, err := Divide(tt.a, tt.b)
+            
+            if tt.expectError {
+                if err == nil {
+                    t.Errorf("Divide(%d, %d) expected error, but got none", tt.a, tt.b)
+                }
+            } else {
+                if err != nil {
+                    t.Errorf("Divide(%d, %d) unexpected error: %v", tt.a, tt.b, err)
+                }
+                if result != tt.expected {
+                    t.Errorf("Divide(%d, %d) = %d; expected %d", tt.a, tt.b, result, tt.expected)
+                }
+            }
+        })
+    }
+}
+
+// Пример запуска: go test -v
+Задание: Table-driven тестирование
+
+96. Mock тестирование
+go
+package main
+import (
+    "errors"
+    "testing"
+)
+
+// Интерфейс для зависимости
+type UserRepository interface {
+    FindByID(id int) (*User, error)
+    Save(user *User) error
+}
+
+type User struct {
+    ID   int
+    Name string
+}
+
+// Реальная реализация
+type RealUserRepository struct {
+    users map[int]*User
+}
+
+func NewRealUserRepository() *RealUserRepository {
+    return &RealUserRepository{
+        users: map[int]*User{
+            1: {ID: 1, Name: "Alice"},
+            2: {ID: 2, Name: "Bob"},
+        },
+    }
+}
+
+func (r *RealUserRepository) FindByID(id int) (*User, error) {
+    user, exists := r.users[id]
+    if !exists {
+        return nil, errors.New("user not found")
+    }
+    return user, nil
+}
+
+func (r *RealUserRepository) Save(user *User) error {
+    r.users[user.ID] = user
+    return nil
+}
+
+// Mock реализация для тестов
+type MockUserRepository struct {
+    FindByIDFunc func(id int) (*User, error)
+    SaveFunc     func(user *User) error
+}
+
+func (m *MockUserRepository) FindByID(id int) (*User, error) {
+    return m.FindByIDFunc(id)
+}
+
+func (m *MockUserRepository) Save(user *User) error {
+    return m.SaveFunc(user)
+}
+
+// Сервис, который использует репозиторий
+type UserService struct {
+    repo UserRepository
+}
+
+func NewUserService(repo UserRepository) *UserService {
+    return &UserService{repo: repo}
+}
+
+func (s *UserService) GetUserName(id int) (string, error) {
+    user, err := s.repo.FindByID(id)
+    if err != nil {
+        return "", err
+    }
+    return user.Name, nil
+}
+
+func (s *UserService) CreateUser(id int, name string) error {
+    user := &User{ID: id, Name: name}
+    return s.repo.Save(user)
+}
+
+// Тесты с mock
+func TestUserService_GetUserName(t *testing.T) {
+    mockRepo := &MockUserRepository{
+        FindByIDFunc: func(id int) (*User, error) {
+            if id == 1 {
+                return &User{ID: 1, Name: "Test User"}, nil
+            }
+            return nil, errors.New("not found")
+        },
+    }
+    
+    service := NewUserService(mockRepo)
+    
+    // Тест успешного случая
+    name, err := service.GetUserName(1)
+    if err != nil {
+        t.Errorf("Unexpected error: %v", err)
+    }
+    if name != "Test User" {
+        t.Errorf("Expected 'Test User', got '%s'", name)
+    }
+    
+    // Тест случая с ошибкой
+    _, err = service.GetUserName(2)
+    if err == nil {
+        t.Error("Expected error, got nil")
+    }
+}
+
+func TestUserService_CreateUser(t *testing.T) {
+    var savedUser *User
+    mockRepo := &MockUserRepository{
+        SaveFunc: func(user *User) error {
+            savedUser = user
+            return nil
+        },
+    }
+    
+    service := NewUserService(mockRepo)
+    
+    err := service.CreateUser(3, "Charlie")
+    if err != nil {
+        t.Errorf("Unexpected error: %v", err)
+    }
+    
+    if savedUser == nil {
+        t.Error("User was not saved")
+    }
+    if savedUser.ID != 3 || savedUser.Name != "Charlie" {
+        t.Errorf("Saved user mismatch: %+v", savedUser)
+    }
+}
+Задание: Mock тестирование с зависимостями
+
+97. Интеграционные тесты
+go
+package main
+import (
+    "database/sql"
+    "testing"
+    
+    _ "github.com/mattn/go-sqlite3"
+)
+
+type User struct {
+    ID   int
+    Name string
+    Age  int
+}
+
+type UserRepository struct {
+    db *sql.DB
+}
+
+func NewUserRepository(db *sql.DB) *UserRepository {
