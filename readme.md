@@ -9528,3 +9528,6760 @@ func setupSignalHandlers() {
     }()
 }
 Задание: Управление процессами: запуск, мониторинг, сигналы
+
+136. Работа с файловой системой (low-level)
+go
+package main
+import (
+    "fmt"
+    "io"
+    "os"
+    "path/filepath"
+    "syscall"
+    "time"
+)
+
+type FileSystemManager struct{}
+
+func NewFileSystemManager() *FileSystemManager {
+    return &FileSystemManager{}
+}
+
+func (fsm *FileSystemManager) GetFileInfo(path string) error {
+    fileInfo, err := os.Stat(path)
+    if err != nil {
+        return err
+    }
+    
+    fmt.Printf("File: %s\n", path)
+    fmt.Printf("Size: %d bytes\n", fileInfo.Size())
+    fmt.Printf("Permissions: %s\n", fileInfo.Mode())
+    fmt.Printf("Last Modified: %s\n", fileInfo.ModTime())
+    fmt.Printf("Is Directory: %t\n", fileInfo.IsDir())
+    
+    // Дополнительная системная информация
+    if sysStat, ok := fileInfo.Sys().(*syscall.Stat_t); ok {
+        fmt.Printf("Inode: %d\n", sysStat.Ino)
+        fmt.Printf("Device: %d\n", sysStat.Dev)
+        fmt.Printf("Links: %d\n", sysStat.Nlink)
+        fmt.Printf("UID: %d\n", sysStat.Uid)
+        fmt.Printf("GID: %d\n", sysStat.Gid)
+    }
+    
+    return nil
+}
+
+func (fsm *FileSystemManager) CreateHardLink(src, dst string) error {
+    return os.Link(src, dst)
+}
+
+func (fsm *FileSystemManager) CreateSymlink(src, dst string) error {
+    return os.Symlink(src, dst)
+}
+
+func (fsm *FileSystemManager) ReadSymlink(path string) (string, error) {
+    return os.Readlink(path)
+}
+
+func (fsm *FileSystemManager) ChangeOwner(path string, uid, gid int) error {
+    return os.Chown(path, uid, gid)
+}
+
+func (fsm *FileSystemManager) ChangePermissions(path string, mode os.FileMode) error {
+    return os.Chmod(path, mode)
+}
+
+func (fsm *FileSystemManager) SetFileTimes(path string, atime, mtime time.Time) error {
+    return os.Chtimes(path, atime, mtime)
+}
+
+func (fsm *FileSystemManager) MemoryMapFile(path string) ([]byte, error) {
+    file, err := os.Open(path)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+    
+    fileInfo, err := file.Stat()
+    if err != nil {
+        return nil, err
+    }
+    
+    size := fileInfo.Size()
+    if size == 0 {
+        return []byte{}, nil
+    }
+    
+    // Для memory mapping в Go нужно использовать syscall.Mmap
+    // Это упрощенная версия с чтением всего файла
+    data := make([]byte, size)
+    _, err = io.ReadFull(file, data)
+    if err != nil {
+        return nil, err
+    }
+    
+    return data, nil
+}
+
+func (fsm *FileSystemManager) WatchFileChanges(path string) error {
+    initialStat, err := os.Stat(path)
+    if err != nil {
+        return err
+    }
+    
+    initialModTime := initialStat.ModTime()
+    
+    fmt.Printf("Watching file: %s\n", path)
+    
+    ticker := time.NewTicker(1 * time.Second)
+    defer ticker.Stop()
+    
+    for range ticker.C {
+        stat, err := os.Stat(path)
+        if err != nil {
+            fmt.Printf("Error watching file: %v\n", err)
+            continue
+        }
+        
+        if stat.ModTime() != initialModTime {
+            fmt.Printf("File changed at: %s\n", stat.ModTime())
+            initialModTime = stat.ModTime()
+        }
+    }
+    
+    return nil
+}
+
+func (fsm *FileSystemManager) GetDiskUsage(path string) error {
+    var totalSize int64
+    var fileCount int
+    
+    err := filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        
+        if !info.IsDir() {
+            totalSize += info.Size()
+            fileCount++
+        }
+        
+        return nil
+    })
+    
+    if err != nil {
+        return err
+    }
+    
+    fmt.Printf("Path: %s\n", path)
+    fmt.Printf("Total Size: %d bytes (%.2f MB)\n", totalSize, float64(totalSize)/(1024*1024))
+    fmt.Printf("File Count: %d\n", fileCount)
+    
+    return nil
+}
+
+func (fsm *FileSystemManager) CreateSparseFile(filename string, size int64) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    // Установка размера файла
+    err = file.Truncate(size)
+    if err != nil {
+        return err
+    }
+    
+    fmt.Printf("Created sparse file: %s, size: %d bytes\n", filename, size)
+    return nil
+}
+
+func (fsm *FileSystemManager) LockFile(path string) error {
+    file, err := os.OpenFile(path, os.O_RDWR, 0666)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    // Попытка заблокировать файл
+    err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+    if err != nil {
+        return fmt.Errorf("file is locked: %v", err)
+    }
+    
+    fmt.Printf("File locked: %s\n", path)
+    
+    // Держим блокировку некоторое время
+    time.Sleep(5 * time.Second)
+    
+    // Разблокировка
+    syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+    fmt.Printf("File unlocked: %s\n", path)
+    
+    return nil
+}
+
+func main() {
+    fsm := NewFileSystemManager()
+    
+    // Создание тестового файла
+    testFile := "test_file.txt"
+    os.WriteFile(testFile, []byte("Hello, File System!"), 0644)
+    
+    fmt.Println("=== File Information ===")
+    fsm.GetFileInfo(testFile)
+    
+    fmt.Println("\n=== File Links ===")
+    hardLink := "test_file_hard.txt"
+    fsm.CreateHardLink(testFile, hardLink)
+    fmt.Printf("Created hard link: %s\n", hardLink)
+    
+    symLink := "test_file_sym.txt"
+    fsm.CreateSymlink(testFile, symLink)
+    fmt.Printf("Created symlink: %s\n", symLink)
+    
+    target, _ := fsm.ReadSymlink(symLink)
+    fmt.Printf("Symlink target: %s\n", target)
+    
+    fmt.Println("\n=== File Operations ===")
+    fsm.ChangePermissions(testFile, 0755)
+    fmt.Printf("Changed permissions of %s\n", testFile)
+    
+    // Memory mapping (упрощенное)
+    data, err := fsm.MemoryMapFile(testFile)
+    if err == nil {
+        fmt.Printf("File content: %s\n", string(data))
+    }
+    
+    fmt.Println("\n=== Disk Usage ===")
+    fsm.GetDiskUsage(".")
+    
+    fmt.Println("\n=== Sparse File ===")
+    sparseFile := "sparse_file.bin"
+    fsm.CreateSparseFile(sparseFile, 1024*1024) // 1MB
+    
+    fmt.Println("\n=== File Locking ===")
+    go func() {
+        time.Sleep(1 * time.Second)
+        fsm.LockFile(testFile)
+    }()
+    
+    // Ожидание завершения
+    time.Sleep(10 * time.Second)
+    
+    // Очистка
+    os.Remove(testFile)
+    os.Remove(hardLink)
+    os.Remove(symLink)
+    os.Remove(sparseFile)
+}
+Задание: Низкоуровневая работа с файловой системой
+
+137. System calls и raw sockets
+go
+package main
+import (
+    "encoding/binary"
+    "fmt"
+    "net"
+    "os"
+    "syscall"
+    "time"
+)
+
+type RawSocketManager struct {
+    socketFd int
+}
+
+func NewRawSocketManager(protocol int) (*RawSocketManager, error) {
+    // Создание raw socket
+    fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, protocol)
+    if err != nil {
+        return nil, err
+    }
+    
+    return &RawSocketManager{socketFd: fd}, nil
+}
+
+func (rsm *RawSocketManager) Close() {
+    syscall.Close(rsm.socketFd)
+}
+
+func (rsm *RawSocketManager) SendPacket(destIP string, data []byte) error {
+    // Преобразование IP адреса
+    ip := net.ParseIP(destIP)
+    if ip == nil {
+        return fmt.Errorf("invalid IP address")
+    }
+    
+    ip4 := ip.To4()
+    if ip4 == nil {
+        return fmt.Errorf("IPv6 not supported")
+    }
+    
+    // Создание адреса назначения
+    destAddr := syscall.SockaddrInet4{
+        Port: 0,
+        Addr: [4]byte{ip4[0], ip4[1], ip4[2], ip4[3]},
+    }
+    
+    // Отправка пакета
+    err := syscall.Sendto(rsm.socketFd, data, 0, &destAddr)
+    if err != nil {
+        return err
+    }
+    
+    fmt.Printf("Sent %d bytes to %s\n", len(data), destIP)
+    return nil
+}
+
+func (rsm *RawSocketManager) ReceivePacket() ([]byte, syscall.Sockaddr, error) {
+    buffer := make([]byte, 4096)
+    
+    // Чтение пакета
+    n, addr, err := syscall.Recvfrom(rsm.socketFd, buffer, 0)
+    if err != nil {
+        return nil, nil, err
+    }
+    
+    return buffer[:n], addr, nil
+}
+
+// IP заголовок (упрощенный)
+type IPHeader struct {
+    VersionIHL     byte
+    TOS            byte
+    TotalLength    uint16
+    Identification uint16
+    FlagsFragOffset uint16
+    TTL            byte
+    Protocol       byte
+    Checksum       uint16
+    SourceIP       [4]byte
+    DestIP         [4]byte
+}
+
+func createIPHeader(srcIP, dstIP string, protocol byte, dataLen int) *IPHeader {
+    src := net.ParseIP(srcIP).To4()
+    dst := net.ParseIP(dstIP).To4()
+    
+    header := &IPHeader{
+        VersionIHL:     0x45, // IPv4, header length 5 words (20 bytes)
+        TOS:            0,
+        TotalLength:    uint16(20 + dataLen),
+        Identification: uint16(time.Now().UnixNano() & 0xFFFF),
+        FlagsFragOffset: 0x4000, // Don't fragment
+        TTL:            64,
+        Protocol:       protocol,
+        Checksum:       0,
+    }
+    
+    copy(header.SourceIP[:], src)
+    copy(header.DestIP[:], dst)
+    
+    // Расчет checksum
+    header.Checksum = calculateChecksum(header)
+    
+    return header
+}
+
+func calculateChecksum(header *IPHeader) uint16 {
+    // Преобразование заголовка в байты для расчета checksum
+    var data []byte
+    data = append(data, header.VersionIHL)
+    data = append(data, header.TOS)
+    data = append(data, byte(header.TotalLength>>8), byte(header.TotalLength))
+    data = append(data, byte(header.Identification>>8), byte(header.Identification))
+    data = append(data, byte(header.FlagsFragOffset>>8), byte(header.FlagsFragOffset))
+    data = append(data, header.TTL)
+    data = append(data, header.Protocol)
+    data = append(data, 0, 0) // Checksum будет рассчитан
+    data = append(data, header.SourceIP[:]...)
+    data = append(data, header.DestIP[:]...)
+    
+    return internetChecksum(data)
+}
+
+func internetChecksum(data []byte) uint16 {
+    var sum uint32
+    
+    for i := 0; i < len(data); i += 2 {
+        if i+1 < len(data) {
+            sum += uint32(data[i])<<8 | uint32(data[i+1])
+        } else {
+            sum += uint32(data[i]) << 8
+        }
+    }
+    
+    for sum>>16 != 0 {
+        sum = (sum & 0xFFFF) + (sum >> 16)
+    }
+    
+    return uint16(^sum)
+}
+
+func (rsm *RawSocketManager) SendICMPEchoRequest(destIP string) error {
+    // Создание ICMP Echo Request
+    icmpData := []byte("Hello Raw Socket!")
+    
+    // ICMP заголовок
+    icmpHeader := []byte{
+        8,  // Type: Echo Request
+        0,  // Code
+        0,  // Checksum (будет рассчитан)
+        0,  // Checksum продолжение
+        0,  // Identifier
+        1,  // Identifier продолжение  
+        0,  // Sequence Number
+        1,  // Sequence Number продолжение
+    }
+    
+    // Расчет ICMP checksum
+    icmpPacket := append(icmpHeader, icmpData...)
+    checksum := internetChecksum(icmpPacket)
+    icmpPacket[2] = byte(checksum >> 8)
+    icmpPacket[3] = byte(checksum)
+    
+    // Создание IP пакета
+    ipHeader := createIPHeader("127.0.0.1", destIP, 1, len(icmpPacket))
+    
+    // Сериализация IP заголовка
+    packet := make([]byte, 20)
+    packet[0] = ipHeader.VersionIHL
+    packet[1] = ipHeader.TOS
+    binary.BigEndian.PutUint16(packet[2:4], ipHeader.TotalLength)
+    binary.BigEndian.PutUint16(packet[4:6], ipHeader.Identification)
+    binary.BigEndian.PutUint16(packet[6:8], ipHeader.FlagsFragOffset)
+    packet[8] = ipHeader.TTL
+    packet[9] = ipHeader.Protocol
+    binary.BigEndian.PutUint16(packet[10:12], ipHeader.Checksum)
+    copy(packet[12:16], ipHeader.SourceIP[:])
+    copy(packet[16:20], ipHeader.DestIP[:])
+    
+    // Добавление ICMP пакета
+    packet = append(packet, icmpPacket...)
+    
+    // Отправка
+    return rsm.SendPacket(destIP, packet)
+}
+
+func main() {
+    // Требуются права root для raw sockets
+    
+    fmt.Println("=== Raw Socket Demo ===")
+    
+    // Создание raw socket для ICMP
+    rsm, err := NewRawSocketManager(syscall.IPPROTO_ICMP)
+    if err != nil {
+        fmt.Printf("Error creating raw socket: %v\n", err)
+        fmt.Println("Note: This requires root privileges on most systems")
+        os.Exit(1)
+    }
+    defer rsm.Close()
+    
+    fmt.Println("Raw socket created successfully")
+    
+    // Отправка ICMP Echo Request
+    fmt.Println("\n=== Sending ICMP Echo Request ===")
+    err = rsm.SendICMPEchoRequest("127.0.0.1")
+    if err != nil {
+        fmt.Printf("Error sending ICMP: %v\n", err)
+    }
+    
+    // Прием пакетов
+    fmt.Println("\n=== Receiving Packets ===")
+    fmt.Println("Listening for packets (timeout: 5 seconds)...")
+    
+    go func() {
+        time.Sleep(5 * time.Second)
+        fmt.Println("Timeout reached")
+        os.Exit(0)
+    }()
+    
+    for {
+        data, addr, err := rsm.ReceivePacket()
+        if err != nil {
+            fmt.Printf("Error receiving packet: %v\n", err)
+            continue
+        }
+        
+        if sockAddr, ok := addr.(*syscall.SockaddrInet4); ok {
+            srcIP := fmt.Sprintf("%d.%d.%d.%d", 
+                sockAddr.Addr[0], sockAddr.Addr[1], 
+                sockAddr.Addr[2], sockAddr.Addr[3])
+            
+            fmt.Printf("Received %d bytes from %s\n", len(data), srcIP)
+            
+            // Анализ IP заголовка
+            if len(data) >= 20 {
+                version := data[0] >> 4
+                ihl := (data[0] & 0x0F) * 4
+                protocol := data[9]
+                
+                fmt.Printf("IP Version: %d, Header Length: %d, Protocol: %d\n", 
+                    version, ihl, protocol)
+                
+                // Если это ICMP
+                if protocol == 1 && len(data) >= int(ihl+8) {
+                    icmpType := data[ihl]
+                    icmpCode := data[ihl+1]
+                    
+                    fmt.Printf("ICMP Type: %d, Code: %d\n", icmpType, icmpCode)
+                    
+                    if icmpType == 0 {
+                        fmt.Println("ICMP Echo Reply received!")
+                    }
+                }
+            }
+        }
+    }
+}
+Задание: Работа с raw sockets и системными вызовами
+
+138. Memory management и указатели
+go
+package main
+import (
+    "fmt"
+    "reflect"
+    "runtime"
+    "unsafe"
+)
+
+type MemoryManager struct{}
+
+func NewMemoryManager() *MemoryManager {
+    return &MemoryManager{}
+}
+
+func (mm *MemoryManager) ShowMemoryStats() {
+    var m runtime.MemStats
+    runtime.ReadMemStats(&m)
+    
+    fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+    fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+    fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+    fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+    return b / 1024 / 1024
+}
+
+func (mm *MemoryManager) AnalyzeSliceMemory(slice []int) {
+    sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&slice))
+    
+    fmt.Printf("Slice analysis:\n")
+    fmt.Printf("  Data pointer: %p\n", unsafe.Pointer(sliceHeader.Data))
+    fmt.Printf("  Length: %d\n", sliceHeader.Len)
+    fmt.Printf("  Capacity: %d\n", sliceHeader.Cap)
+    fmt.Printf("  Total memory: %d bytes\n", sliceHeader.Cap*int(unsafe.Sizeof(slice[0])))
+}
+
+func (mm *MemoryManager) ManualMemoryAllocation(size int) unsafe.Pointer {
+    // Выделение памяти вручную
+    memory := make([]byte, size)
+    
+    // Получение указателя на данные
+    sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&memory))
+    return unsafe.Pointer(sliceHeader.Data)
+}
+
+func (mm *MemoryManager) PointerArithmetic() {
+    arr := [5]int{10, 20, 30, 40, 50}
+    
+    // Получение указателя на первый элемент
+    ptr := unsafe.Pointer(&arr[0])
+    
+    fmt.Printf("Array: %v\n", arr)
+    fmt.Printf("Base pointer: %p\n", ptr)
+    
+    // Арифметика указателей через unsafe
+    for i := 0; i < len(arr); i++ {
+        // Вычисление адреса элемента
+        elemPtr := unsafe.Pointer(uintptr(ptr) + uintptr(i)*unsafe.Sizeof(arr[0]))
+        value := *(*int)(elemPtr)
+        
+        fmt.Printf("Element %d: address=%p, value=%d\n", i, elemPtr, value)
+    }
+}
+
+func (mm *MemoryManager) StringInternals() {
+    str := "Hello, World!"
+    
+    // Анализ внутренней структуры строки
+    stringHeader := (*reflect.StringHeader)(unsafe.Pointer(&str))
+    
+    fmt.Printf("String: \"%s\"\n", str)
+    fmt.Printf("Data pointer: %p\n", unsafe.Pointer(stringHeader.Data))
+    fmt.Printf("Length: %d\n", stringHeader.Len)
+    
+    // Конвертация в байты без копирования
+    bytes := (*[1 << 30]byte)(unsafe.Pointer(stringHeader.Data))[:stringHeader.Len:stringHeader.Len]
+    fmt.Printf("As bytes: %v\n", bytes[:5]) // Первые 5 байт
+}
+
+func (mm *MemoryManager) StructMemoryLayout() {
+    type ExampleStruct struct {
+        flag    bool    // 1 byte
+        number  int32   // 4 bytes  
+        decimal float64 // 8 bytes
+        active  bool    // 1 byte
+    }
+    
+    instance := ExampleStruct{
+        flag:    true,
+        number:  42,
+        decimal: 3.14,
+        active:  false,
+    }
+    
+    fmt.Printf("Struct size: %d bytes\n", unsafe.Sizeof(instance))
+    fmt.Printf("Field offsets:\n")
+    fmt.Printf("  flag: %d\n", unsafe.Offsetof(instance.flag))
+    fmt.Printf("  number: %d\n", unsafe.Offsetof(instance.number))
+    fmt.Printf("  decimal: %d\n", unsafe.Offsetof(instance.decimal))
+    fmt.Printf("  active: %d\n", unsafe.Offsetof(instance.active))
+    
+    // Выравнивание
+    fmt.Printf("Alignment: %d\n", unsafe.Alignof(instance))
+}
+
+func (mm *MemoryManager) MemoryPoolDemo() {
+    type Object struct {
+        data [1024]byte // 1KB объект
+        id   int
+    }
+    
+    pool := make([]*Object, 0, 100)
+    
+    fmt.Println("Memory pool demonstration:")
+    
+    // Выделение объектов
+    for i := 0; i < 10; i++ {
+        obj := &Object{id: i}
+        pool = append(pool, obj)
+    }
+    
+    mm.ShowMemoryStats()
+    
+    // "Освобождение" памяти (в Go это делает GC)
+    pool = nil
+    runtime.GC()
+    
+    fmt.Println("After GC:")
+    mm.ShowMemoryStats()
+}
+
+func (mm *MemoryManager) EscapeAnalysisDemo() {
+    // Эта функция демонстрирует escape analysis
+    
+    // Локальная переменная - может остаться в stack
+    localVar := 42
+    fmt.Printf("Local variable: %d (address: %p)\n", localVar, &localVar)
+    
+    // Переменная, которая escape в heap
+    escapedVar := mm.createObject()
+    fmt.Printf("Escaped variable: %v (address: %p)\n", escapedVar, escapedVar)
+}
+
+func (mm *MemoryManager) createObject() *map[string]int {
+    // Этот объект escape в heap, потому что возвращается из функции
+    obj := make(map[string]int)
+    obj["result"] = 100
+    return &obj
+}
+
+func (mm *MemoryManager) UnsafeConversion() {
+    // Конвертация между типами через unsafe
+    
+    // float64 -> int64
+    floatValue := 3.14159
+    floatBits := *(*uint64)(unsafe.Pointer(&floatValue))
+    fmt.Printf("Float: %f, Bits: 0x%016x\n", floatValue, floatBits)
+    
+    // int64 -> float64
+    intValue := int64(42)
+    floatFromInt := *(*float64)(unsafe.Pointer(&intValue))
+    fmt.Printf("Int: %d, As float: %f\n", intValue, floatFromInt)
+    
+    // Важно: это опасные операции!
+}
+
+func main() {
+    mm := NewMemoryManager()
+    
+    fmt.Println("=== Memory Statistics ===")
+    mm.ShowMemoryStats()
+    
+    fmt.Println("\n=== Slice Memory Analysis ===")
+    slice := make([]int, 10, 20)
+    for i := range slice {
+        slice[i] = i * i
+    }
+    mm.AnalyzeSliceMemory(slice)
+    
+    fmt.Println("\n=== Pointer Arithmetic ===")
+    mm.PointerArithmetic()
+    
+    fmt.Println("\n=== String Internals ===")
+    mm.StringInternals()
+    
+    fmt.Println("\n=== Struct Memory Layout ===")
+    mm.StructMemoryLayout()
+    
+    fmt.Println("\n=== Memory Pool ===")
+    mm.MemoryPoolDemo()
+    
+    fmt.Println("\n=== Escape Analysis ===")
+    mm.EscapeAnalysisDemo()
+    
+    fmt.Println("\n=== Unsafe Conversions ===")
+    mm.UnsafeConversion()
+    
+    fmt.Println("\n=== Final Memory Stats ===")
+    mm.ShowMemoryStats()
+}
+Задание: Управление памятью, указатели и unsafe операции
+
+139. Profiling и оптимизация
+go
+package main
+import (
+    "fmt"
+    "log"
+    "os"
+    "runtime"
+    "runtime/pprof"
+    "sort"
+    "time"
+)
+
+type ProfilingManager struct {
+    cpuProfile *os.File
+    memProfile *os.File
+}
+
+func NewProfilingManager() *ProfilingManager {
+    return &ProfilingManager{}
+}
+
+func (pm *ProfilingManager) StartCPUProfile(filename string) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    
+    pm.cpuProfile = file
+    pprof.StartCPUProfile(file)
+    fmt.Printf("CPU profiling started: %s\n", filename)
+    return nil
+}
+
+func (pm *ProfilingManager) StopCPUProfile() {
+    if pm.cpuProfile != nil {
+        pprof.StopCPUProfile()
+        pm.cpuProfile.Close()
+        fmt.Println("CPU profiling stopped")
+    }
+}
+
+func (pm *ProfilingManager) WriteMemProfile(filename string) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    pm.memProfile = file
+    runtime.GC() // Принудительный GC перед профилированием памяти
+    return pprof.WriteHeapProfile(file)
+}
+
+func (pm *ProfilingManager) MeasureExecutionTime(fn func(), name string) time.Duration {
+    start := time.Now()
+    fn()
+    duration := time.Since(start)
+    fmt.Printf("%s executed in: %v\n", name, duration)
+    return duration
+}
+
+func (pm *ProfilingManager) MemoryUsage() {
+    var m runtime.MemStats
+    runtime.ReadMemStats(&m)
+    
+    fmt.Printf("Memory Usage:\n")
+    fmt.Printf("  Alloc:      %v MB\n", m.Alloc/1024/1024)
+    fmt.Printf("  TotalAlloc: %v MB\n", m.TotalAlloc/1024/1024)
+    fmt.Printf("  Sys:        %v MB\n", m.Sys/1024/1024)
+    fmt.Printf("  NumGC:      %v\n", m.NumGC)
+    fmt.Printf("  GCSys:      %v MB\n", m.GCSys/1024/1024)
+}
+
+// Функции для профилирования
+func inefficientFunction() {
+    // Неэффективная реализация
+    var result []int
+    for i := 0; i < 100000; i++ {
+        result = append(result, i)
+    }
+    
+    // Ненужная сортировка
+    sort.Ints(result)
+    
+    // Лишние операции
+    for i := 0; i < len(result); i++ {
+        result[i] = result[i] * 2
+    }
+}
+
+func optimizedFunction() {
+    // Оптимизированная реализация
+    result := make([]int, 100000)
+    for i := 0; i < 100000; i++ {
+        result[i] = i * 2
+    }
+}
+
+func memoryIntensiveFunction() {
+    // Функция, интенсивно использующая память
+    data := make([][]byte, 1000)
+    for i := 0; i < 1000; i++ {
+        data[i] = make([]byte, 1024*1024) // 1MB каждый
+    }
+    
+    // Симуляция работы
+    time.Sleep(100 * time.Millisecond)
+    
+    // "Освобождение" памяти
+    data = nil
+}
+
+func (pm *ProfilingManager) RunProfilingDemo() {
+    fmt.Println("=== Profiling Demo ===")
+    
+    // Запуск CPU профилирования
+    pm.StartCPUProfile("cpu.prof")
+    defer pm.StopCPUProfile()
+    
+    // Сравнение производительности
+    fmt.Println("\n=== Performance Comparison ===")
+    inefficientTime := pm.MeasureExecutionTime(inefficientFunction, "Inefficient function")
+    optimizedTime := pm.MeasureExecutionTime(optimizedFunction, "Optimized function")
+    
+    improvement := float64(inefficientTime-optimizedTime) / float64(inefficientTime) * 100
+    fmt.Printf("Performance improvement: %.2f%%\n", improvement)
+    
+    // Мониторинг памяти
+    fmt.Println("\n=== Memory Monitoring ===")
+    pm.MemoryUsage()
+    
+    // Запуск memory-intensive функции
+    fmt.Println("\n=== Memory Intensive Operation ===")
+    pm.MeasureExecutionTime(memoryIntensiveFunction, "Memory intensive function")
+    
+    // Сбор мусора
+    runtime.GC()
+    
+    // Финальная статистика памяти
+    fmt.Println("\n=== Final Memory Stats ===")
+    pm.MemoryUsage()
+    
+    // Сохранение memory profile
+    pm.WriteMemProfile("mem.prof")
+    fmt.Println("Memory profile saved: mem.prof")
+}
+
+func (pm *ProfilingManager) GoroutineProfile() {
+    fmt.Println("\n=== Goroutine Profile ===")
+    
+    // Создание нескольких горутин
+    for i := 0; i < 10; i++ {
+        go func(id int) {
+            time.Sleep(time.Duration(id) * time.Second)
+        }(i)
+    }
+    
+    // Получение профиля горутин
+    profile := pprof.Lookup("goroutine")
+    profile.WriteTo(os.Stdout, 1)
+    
+    fmt.Printf("Current goroutines: %d\n", runtime.NumGoroutine())
+}
+
+func (pm *ProfilingManager) BlockProfile() {
+    fmt.Println("\n=== Block Profile ===")
+    
+    // Включение блокирующего профилирования
+    runtime.SetBlockProfileRate(1)
+    
+    // Функция с блокировками
+    ch := make(chan int)
+    go func() {
+        time.Sleep(100 * time.Millisecond)
+        ch <- 42
+    }()
+    
+    // Блокирующая операция
+    <-ch
+    
+    // Получение профиля блокировок
+    profile := pprof.Lookup("block")
+    profile.WriteTo(os.Stdout, 1)
+}
+
+func (pm *ProfilingManager) CustomProfile() {
+    fmt.Println("\n=== Custom Profile ===")
+    
+    // Создание кастомного профиля
+    customProf := pprof.NewProfile("custom.operations")
+    
+    // Регистрация операций
+    startOperation := func(name string) func() {
+        start := time.Now()
+        return func() {
+            duration := time.Since(start)
+            customProf.Add(nil, int64(duration))
+            fmt.Printf("Operation '%s' took: %v\n", name, duration)
+        }
+    }
+    
+    // Измерение операций
+    defer startOperation("database_query")()
+    time.Sleep(50 * time.Millisecond)
+    
+    defer startOperation("file_operation")()
+    time.Sleep(30 * time.Millisecond)
+    
+    // Сохранение кастомного профиля
+    file, _ := os.Create("custom.prof")
+    defer file.Close()
+    customProf.WriteTo(file, 0)
+    fmt.Println("Custom profile saved: custom.prof")
+}
+
+func main() {
+    pm := NewProfilingManager()
+    
+    // Запуск демонстрации профилирования
+    pm.RunProfilingDemo()
+    
+    // Дополнительные профили
+    pm.GoroutineProfile()
+    pm.BlockProfile()
+    pm.CustomProfile()
+    
+    fmt.Println("\n=== Profiling Completed ===")
+    fmt.Println("To analyze profiles, run:")
+    fmt.Println("  go tool pprof cpu.prof")
+    fmt.Println("  go tool pprof mem.prof")
+    fmt.Println("  go tool pprof custom.prof")
+}
+
+// Дополнительная утилита для анализа
+func analyzePerformance() {
+    // Анализ аллокаций
+    type allocation struct {
+        size int
+        desc string
+    }
+    
+    allocations := []allocation{
+        {1024, "small buffer"},
+        {1024 * 1024, "large buffer"},
+        {512, "medium buffer"},
+    }
+    
+    // Сортировка по размеру
+    sort.Slice(allocations, func(i, j int) bool {
+        return allocations[i].size < allocations[j].size
+    })
+    
+    fmt.Println("Allocations sorted by size:")
+    for _, alloc := range allocations {
+        fmt.Printf("  %s: %d bytes\n", alloc.desc, alloc.size)
+    }
+}
+Задание: Профилирование производительности и оптимизация кода
+
+140. Cross-platform компиляция
+go
+package main
+import (
+    "fmt"
+    "runtime"
+    "syscall"
+)
+
+type PlatformInfo struct {
+    OS      string
+    Arch    string
+    Version string
+}
+
+func GetPlatformInfo() *PlatformInfo {
+    info := &PlatformInfo{
+        OS:   runtime.GOOS,
+        Arch: runtime.GOARCH,
+    }
+    
+    // Получение информации о версии ОС
+    switch runtime.GOOS {
+    case "windows":
+        info.Version = getWindowsVersion()
+    case "linux":
+        info.Version = getLinuxVersion()
+    case "darwin":
+        info.Version = getMacVersion()
+    default:
+        info.Version = "unknown"
+    }
+    
+    return info
+}
+
+func getWindowsVersion() string {
+    // Используем syscall для получения версии Windows
+    kernel32 := syscall.NewLazyDLL("kernel32.dll")
+    getVersion := kernel32.NewProc("GetVersion")
+    
+    ret, _, _ := getVersion.Call()
+    version := byte(ret)
+    major := byte(ret >> 8)
+    
+    return fmt.Sprintf("%d.%d", version, major)
+}
+
+func getLinuxVersion() string {
+    // Чтение информации о версии Linux
+    // В реальном приложении нужно читать /etc/os-release
+    return "Linux"
+}
+
+func getMacVersion() string {
+    // Получение версии macOS
+    // В реальном приложении используйте sysctl или другие методы
+    return "macOS"
+}
+
+func ShowCompilationInstructions() {
+    fmt.Println("=== Cross-Platform Compilation ===")
+    fmt.Println("To compile for different platforms, use:")
+    fmt.Println()
+    
+    targets := map[string]string{
+        "Windows 64-bit": "GOOS=windows GOARCH=amd64 go build -o app.exe",
+        "Windows 32-bit": "GOOS=windows GOARCH=386 go build -o app.exe",
+        "Linux 64-bit":   "GOOS=linux GOARCH=amd64 go build -o app",
+        "Linux 32-bit":   "GOOS=linux GOARCH=386 go build -o app",
+        "macOS 64-bit":   "GOOS=darwin GOARCH=amd64 go build -o app",
+        "macOS ARM":      "GOOS=darwin GOARCH=arm64 go build -o app",
+        "FreeBSD":        "GOOS=freebsd GOARCH=amd64 go build -o app",
+        "Android":        "GOOS=android GOARCH=arm64 go build -o app",
+    }
+    
+    for platform, command := range targets {
+        fmt.Printf("%s:\n  %s\n\n", platform, command)
+    }
+}
+
+func PlatformSpecificCode() {
+    fmt.Println("=== Platform-Specific Features ===")
+    
+    switch runtime.GOOS {
+    case "windows":
+        fmt.Println("Windows-specific features:")
+        fmt.Println("  - Registry access")
+        fmt.Println("  - COM components")
+        fmt.Println("  - Windows API calls")
+        
+    case "linux":
+        fmt.Println("Linux-specific features:")
+        fmt.Println("  - Systemd integration")
+        fmt.Println("  - cgroups support")
+        fmt.Println("  - Linux namespaces")
+        
+    case "darwin":
+        fmt.Println("macOS-specific features:")
+        fmt.Println("  - Cocoa integration")
+        fmt.Println("  - Launchd services")
+        fmt.Println("  - Apple Script")
+        
+    default:
+        fmt.Println("Unknown platform features")
+    }
+}
+
+func FilePathExample() {
+    fmt.Println("=== Cross-Platform File Paths ===")
+    
+    // Использование filepath для кроссплатформенных путей
+    path := "directory" + string(filepath.Separator) + "file.txt"
+    fmt.Printf("Platform-specific path: %s\n", path)
+    
+    // Примеры путей
+    paths := []string{
+        filepath.Join("usr", "local", "bin"),
+        filepath.Join("C:", "Program Files", "App"),
+        filepath.Join("/home", "user", "documents"),
+    }
+    
+    for _, p := range paths {
+        fmt.Printf("Normalized path: %s\n", filepath.Clean(p))
+    }
+}
+
+func EnvironmentVariables() {
+    fmt.Println("=== Platform-Specific Environment ===")
+    
+    // Переменные окружения, специфичные для платформ
+    envVars := map[string]string{
+        "windows": "PATH",
+        "linux":   "PATH",
+        "darwin":  "PATH",
+    }
+    
+    if varName, exists := envVars[runtime.GOOS]; exists {
+        value := os.Getenv(varName)
+        if len(value) > 100 {
+            value = value[:100] + "..."
+        }
+        fmt.Printf("%s: %s\n", varName, value)
+    }
+    
+    // Дополнительные переменные
+    switch runtime.GOOS {
+    case "windows":
+        fmt.Printf("OS: %s\n", os.Getenv("OS"))
+        fmt.Printf("COMPUTERNAME: %s\n", os.Getenv("COMPUTERNAME"))
+    case "linux", "darwin":
+        fmt.Printf("USER: %s\n", os.Getenv("USER"))
+        fmt.Printf("HOME: %s\n", os.Getenv("HOME"))
+    }
+}
+
+func BuildConstraintsDemo() {
+    fmt.Println("=== Build Constraints ===")
+    fmt.Println("Add these comments to conditionally compile code:")
+    fmt.Println()
+    
+    constraints := []string{
+        "//go:build windows",
+        "// +build windows",
+        "",
+        "//go:build linux || darwin",
+        "// +build linux darwin",
+        "",
+        "//go:build !windows",
+        "// +build !windows",
+    }
+    
+    for _, constraint := range constraints {
+        fmt.Println(constraint)
+    }
+}
+
+func main() {
+    // Информация о платформе
+    info := GetPlatformInfo()
+    fmt.Printf("Current Platform: %s/%s\n", info.OS, info.Arch)
+    fmt.Printf("OS Version: %s\n", info.Version)
+    fmt.Println()
+    
+    // Инструкции по компиляции
+    ShowCompilationInstructions()
+    
+    // Платформо-специфичные особенности
+    PlatformSpecificCode()
+    fmt.Println()
+    
+    // Работа с путями
+    FilePathExample()
+    fmt.Println()
+    
+    // Переменные окружения
+    EnvironmentVariables()
+    fmt.Println()
+    
+    // Build constraints
+    BuildConstraintsDemo()
+    
+    // Демонстрация кроссплатформенного кода
+    fmt.Println("\n=== Cross-Platform Demo ===")
+    demoCrossPlatformFeatures()
+}
+
+func demoCrossPlatformFeatures() {
+    // Кроссплатформенные операции
+    
+    // 1. Работа с файлами
+    tempFile, err := os.CreateTemp("", "crossplatform_*.txt")
+    if err == nil {
+        defer os.Remove(tempFile.Name())
+        tempFile.WriteString("Cross-platform file content")
+        fmt.Printf("Created temp file: %s\n", tempFile.Name())
+    }
+    
+    // 2. Работа с временем
+    now := time.Now()
+    fmt.Printf("Current time: %s\n", now.Format(time.RFC1123))
+    
+    // 3. Работа с сетью
+    hostname, err := os.Hostname()
+    if err == nil {
+        fmt.Printf("Hostname: %s\n", hostname)
+    }
+    
+    // 4. Параллелизм
+    var wg sync.WaitGroup
+    for i := 0; i < 3; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            fmt.Printf("Goroutine %d on %s\n", id, runtime.GOOS)
+        }(i)
+    }
+    wg.Wait()
+}
+Задание: Кроссплатформенная компиляция и платформо-специфичный код
+
+Это 140 примеров из 200. Хотите, чтобы я продолжил с оставшимися 60 примерами? Они будут охватывать: сетевые протоколы, базы данных NoSQL, машинное обучение, компьютерное зрение и другие продвинутые темы.
+
+This response is AI-generated, for reference only.
+да
+Продолжаю с оставшимися 60 примерами, охватывающими продвинутые темы:
+
+Сетевые протоколы и распределенные системы
+141. DNS клиент и сервер
+go
+package main
+import (
+    "fmt"
+    "net"
+    "strings"
+)
+
+type DNSClient struct{}
+
+func NewDNSClient() *DNSClient {
+    return &DNSClient{}
+}
+
+func (dc *DNSClient) LookupHost(hostname string) ([]string, error) {
+    return net.LookupHost(hostname)
+}
+
+func (dc *DNSClient) LookupIP(hostname string) ([]net.IP, error) {
+    return net.LookupIP(hostname)
+}
+
+func (dc *DNSClient) LookupCNAME(hostname string) (string, error) {
+    return net.LookupCNAME(hostname)
+}
+
+func (dc *DNSClient) LookupMX(hostname string) ([]*net.MX, error) {
+    return net.LookupMX(hostname)
+}
+
+func (dc *DNSClient) LookupTXT(hostname string) ([]string, error) {
+    return net.LookupTXT(hostname)
+}
+
+func (dc *DNSClient) LookupNS(hostname string) ([]*net.NS, error) {
+    return net.LookupNS(hostname)
+}
+
+func (dc *DNSClient) CustomDNSLookup(hostname string, dnsServer string) ([]string, error) {
+    resolver := &net.Resolver{
+        PreferGo: true,
+        Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+            d := net.Dialer{}
+            return d.DialContext(ctx, "udp", dnsServer+":53")
+        },
+    }
+    
+    return resolver.LookupHost(context.Background(), hostname)
+}
+
+func (dc *DNSClient) ReverseDNSLookup(ip string) ([]string, error) {
+    return net.LookupAddr(ip)
+}
+
+func main() {
+    dnsClient := NewDNSClient()
+    
+    hostname := "google.com"
+    
+    fmt.Printf("=== DNS Lookup for %s ===\n", hostname)
+    
+    // A records
+    ips, err := dnsClient.LookupHost(hostname)
+    if err == nil {
+        fmt.Printf("A Records: %v\n", ips)
+    }
+    
+    // MX records
+    mxRecords, err := dnsClient.LookupMX(hostname)
+    if err == nil {
+        fmt.Printf("MX Records:\n")
+        for _, mx := range mxRecords {
+            fmt.Printf("  %s (pref: %d)\n", mx.Host, mx.Pref)
+        }
+    }
+    
+    // TXT records
+    txtRecords, err := dnsClient.LookupTXT(hostname)
+    if err == nil {
+        fmt.Printf("TXT Records: %v\n", txtRecords)
+    }
+    
+    // NS records
+    nsRecords, err := dnsClient.LookupNS(hostname)
+    if err == nil {
+        fmt.Printf("NS Records:\n")
+        for _, ns := range nsRecords {
+            fmt.Printf("  %s\n", ns.Host)
+        }
+    }
+    
+    // CNAME
+    cname, err := dnsClient.LookupCNAME("www." + hostname)
+    if err == nil {
+        fmt.Printf("CNAME: %s\n", cname)
+    }
+    
+    // Custom DNS server
+    customIPs, err := dnsClient.CustomDNSLookup(hostname, "8.8.8.8")
+    if err == nil {
+        fmt.Printf("Using Google DNS: %v\n", customIPs)
+    }
+    
+    // Reverse DNS
+    if len(ips) > 0 {
+        reverse, err := dnsClient.ReverseDNSLookup(ips[0])
+        if err == nil {
+            fmt.Printf("Reverse DNS for %s: %v\n", ips[0], reverse)
+        }
+    }
+}
+
+// Простой DNS сервер
+type DNSServer struct {
+    records map[string]string
+}
+
+func NewDNSServer() *DNSServer {
+    return &DNSServer{
+        records: map[string]string{
+            "test.local.": "127.0.0.1",
+            "api.local.":  "192.168.1.100",
+            "db.local.":   "192.168.1.101",
+        },
+    }
+}
+
+func (ds *DNSServer) Start() error {
+    conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: 5353})
+    if err != nil {
+        return err
+    }
+    defer conn.Close()
+    
+    fmt.Println("DNS Server listening on :5353")
+    
+    buffer := make([]byte, 512)
+    for {
+        n, addr, err := conn.ReadFromUDP(buffer)
+        if err != nil {
+            continue
+        }
+        
+        go ds.handleQuery(conn, addr, buffer[:n])
+    }
+}
+
+func (ds *DNSServer) handleQuery(conn *net.UDPConn, addr *net.UDPAddr, data []byte) {
+    // Упрощенная обработка DNS запроса
+    query := string(data)
+    if strings.Contains(query, "test.local") {
+        response := []byte("test.local 127.0.0.1")
+        conn.WriteToUDP(response, addr)
+    }
+}
+Задание: DNS клиент с различными типами запросов и простой DNS сервер
+
+142. FTP клиент
+go
+package main
+import (
+    "bufio"
+    "fmt"
+    "io"
+    "net"
+    "net/textproto"
+    "strconv"
+    "strings"
+)
+
+type FTPClient struct {
+    conn     net.Conn
+    reader   *textproto.Reader
+    writer   *textproto.Writer
+    host     string
+    username string
+    password string
+}
+
+func NewFTPClient(host string) *FTPClient {
+    return &FTPClient{
+        host: host,
+    }
+}
+
+func (fc *FTPClient) Connect() error {
+    conn, err := net.Dial("tcp", fc.host+":21")
+    if err != nil {
+        return err
+    }
+    
+    fc.conn = conn
+    fc.reader = textproto.NewReader(bufio.NewReader(conn))
+    fc.writer = textproto.NewWriter(bufio.NewWriter(conn))
+    
+    // Чтение приветственного сообщения
+    message, err := fc.reader.ReadLine()
+    if err != nil {
+        return err
+    }
+    fmt.Printf("Server: %s\n", message)
+    
+    return nil
+}
+
+func (fc *FTPClient) Login(username, password string) error {
+    fc.username = username
+    fc.password = password
+    
+    // USER command
+    if err := fc.sendCommand("USER " + username); err != nil {
+        return err
+    }
+    
+    // PASS command
+    if err := fc.sendCommand("PASS " + password); err != nil {
+        return err
+    }
+    
+    return nil
+}
+
+func (fc *FTPClient) sendCommand(command string) error {
+    fmt.Printf("Client: %s\n", command)
+    if err := fc.writer.PrintfLine(command); err != nil {
+        return err
+    }
+    
+    response, err := fc.reader.ReadLine()
+    if err != nil {
+        return err
+    }
+    fmt.Printf("Server: %s\n", response)
+    
+    if !strings.HasPrefix(response, "2") && !strings.HasPrefix(response, "3") {
+        return fmt.Errorf("command failed: %s", response)
+    }
+    
+    return nil
+}
+
+func (fc *FTPClient) ListFiles() error {
+    // Переход в пассивный режим
+    if err := fc.sendCommand("PASV"); err != nil {
+        return err
+    }
+    
+    response, _ := fc.reader.ReadLine()
+    
+    // Парсинг PASV response для получения адреса данных
+    start := strings.Index(response, "(")
+    end := strings.Index(response, ")")
+    if start == -1 || end == -1 {
+        return fmt.Errorf("invalid PASV response")
+    }
+    
+    pasvData := strings.Split(response[start+1:end], ",")
+    if len(pasvData) != 6 {
+        return fmt.Errorf("invalid PASV data")
+    }
+    
+    ip := strings.Join(pasvData[0:4], ".")
+    port1, _ := strconv.Atoi(pasvData[4])
+    port2, _ := strconv.Atoi(pasvData[5])
+    port := port1*256 + port2
+    
+    // Подключение к data connection
+    dataConn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", ip, port))
+    if err != nil {
+        return err
+    }
+    defer dataConn.Close()
+    
+    // Отправка LIST команды
+    if err := fc.sendCommand("LIST"); err != nil {
+        return err
+    }
+    
+    // Чтение данных
+    data, err := io.ReadAll(dataConn)
+    if err != nil {
+        return err
+    }
+    
+    fmt.Printf("Directory listing:\n%s\n", string(data))
+    
+    // Чтение завершающего ответа
+    response, _ = fc.reader.ReadLine()
+    fmt.Printf("Server: %s\n", response)
+    
+    return nil
+}
+
+func (fc *FTPClient) DownloadFile(filename string) error {
+    // Аналогично ListFiles, но для RETR команды
+    if err := fc.sendCommand("RETR " + filename); err != nil {
+        return err
+    }
+    
+    // Здесь должна быть реализация загрузки файла
+    // Аналогично ListFiles с созданием data connection
+    
+    return nil
+}
+
+func (fc *FTPClient) UploadFile(filename string, data []byte) error {
+    // Аналогично ListFiles, но для STOR команды
+    if err := fc.sendCommand("STOR " + filename); err != nil {
+        return err
+    }
+    
+    // Здесь должна быть реализация загрузки файла
+    // Аналогично ListFiles с созданием data connection
+    
+    return nil
+}
+
+func (fc *FTPClient) ChangeDirectory(path string) error {
+    return fc.sendCommand("CWD " + path)
+}
+
+func (fc *FTPClient) PrintWorkingDirectory() error {
+    return fc.sendCommand("PWD")
+}
+
+func (fc *FTPClient) Quit() error {
+    if err := fc.sendCommand("QUIT"); err != nil {
+        return err
+    }
+    return fc.conn.Close()
+}
+
+func main() {
+    client := NewFTPClient("localhost")
+    
+    // Подключение
+    if err := client.Connect(); err != nil {
+        fmt.Printf("Connection error: %v\n", err)
+        return
+    }
+    
+    // Аутентификация (анонимный доступ)
+    if err := client.Login("anonymous", "guest"); err != nil {
+        fmt.Printf("Login error: %v\n", err)
+        return
+    }
+    
+    // Получение списка файлов
+    if err := client.ListFiles(); err != nil {
+        fmt.Printf("List error: %v\n", err)
+    }
+    
+    // Текущая директория
+    client.PrintWorkingDirectory()
+    
+    // Завершение сессии
+    client.Quit()
+}
+Задание: FTP клиент с поддержкой основных команд
+
+143. SMTP клиент для отправки email
+go
+package main
+import (
+    "crypto/tls"
+    "fmt"
+    "net"
+    "net/smtp"
+    "strings"
+)
+
+type Email struct {
+    From    string
+    To      []string
+    Subject string
+    Body    string
+}
+
+type SMTPClient struct {
+    host     string
+    port     int
+    username string
+    password string
+    tls      bool
+}
+
+func NewSMTPClient(host string, port int, username, password string, useTLS bool) *SMTPClient {
+    return &SMTPClient{
+        host:     host,
+        port:     port,
+        username: username,
+        password: password,
+        tls:      useTLS,
+    }
+}
+
+func (sc *SMTPClient) SendEmail(email *Email) error {
+    // Подготовка сообщения
+    message := sc.buildMessage(email)
+    
+    // Адрес сервера
+    addr := fmt.Sprintf("%s:%d", sc.host, sc.port)
+    
+    if sc.tls {
+        return sc.sendWithTLS(addr, email, message)
+    } else {
+        return sc.sendPlain(addr, email, message)
+    }
+}
+
+func (sc *SMTPClient) sendPlain(addr string, email *Email, message string) error {
+    // Аутентификация
+    auth := smtp.PlainAuth("", sc.username, sc.password, sc.host)
+    
+    // Отправка email
+    return smtp.SendMail(addr, auth, email.From, email.To, []byte(message))
+}
+
+func (sc *SMTPClient) sendWithTLS(addr string, email *Email, message string) error {
+    // Подключение к серверу
+    conn, err := net.Dial("tcp", addr)
+    if err != nil {
+        return err
+    }
+    defer conn.Close()
+    
+    // Создание SMTP клиента
+    client, err := smtp.NewClient(conn, sc.host)
+    if err != nil {
+        return err
+    }
+    defer client.Close()
+    
+    // STARTTLS
+    if err = client.StartTLS(&tls.Config{ServerName: sc.host}); err != nil {
+        return err
+    }
+    
+    // Аутентификация
+    auth := smtp.PlainAuth("", sc.username, sc.password, sc.host)
+    if err = client.Auth(auth); err != nil {
+        return err
+    }
+    
+    // Отправитель
+    if err = client.Mail(email.From); err != nil {
+        return err
+    }
+    
+    // Получатели
+    for _, to := range email.To {
+        if err = client.Rcpt(to); err != nil {
+            return err
+        }
+    }
+    
+    // Данные
+    w, err := client.Data()
+    if err != nil {
+        return err
+    }
+    
+    // Запись сообщения
+    _, err = w.Write([]byte(message))
+    if err != nil {
+        return err
+    }
+    
+    // Закрытие writer'а
+    err = w.Close()
+    if err != nil {
+        return err
+    }
+    
+    return client.Quit()
+}
+
+func (sc *SMTPClient) buildMessage(email *Email) string {
+    var message strings.Builder
+    
+    // Заголовки
+    message.WriteString(fmt.Sprintf("From: %s\r\n", email.From))
+    message.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(email.To, ", ")))
+    message.WriteString(fmt.Sprintf("Subject: %s\r\n", email.Subject))
+    message.WriteString("MIME-Version: 1.0\r\n")
+    message.WriteString("Content-Type: text/plain; charset=\"utf-8\"\r\n")
+    message.WriteString("\r\n")
+    
+    // Тело сообщения
+    message.WriteString(email.Body)
+    message.WriteString("\r\n")
+    
+    return message.String()
+}
+
+func (sc *SMTPClient) SendHTMLEmail(email *Email, htmlBody string) error {
+    // Создание HTML сообщения
+    var message strings.Builder
+    
+    message.WriteString(fmt.Sprintf("From: %s\r\n", email.From))
+    message.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(email.To, ", ")))
+    message.WriteString(fmt.Sprintf("Subject: %s\r\n", email.Subject))
+    message.WriteString("MIME-Version: 1.0\r\n")
+    message.WriteString("Content-Type: text/html; charset=\"utf-8\"\r\n")
+    message.WriteString("\r\n")
+    message.WriteString(htmlBody)
+    message.WriteString("\r\n")
+    
+    // Отправка
+    return sc.SendEmail(&Email{
+        From:    email.From,
+        To:      email.To,
+        Subject: email.Subject,
+        Body:    message.String(),
+    })
+}
+
+func (sc *SMTPClient) VerifyConnection() error {
+    conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", sc.host, sc.port))
+    if err != nil {
+        return err
+    }
+    defer conn.Close()
+    
+    // Чтение приветственного сообщения
+    buffer := make([]byte, 1024)
+    n, err := conn.Read(buffer)
+    if err != nil {
+        return err
+    }
+    
+    fmt.Printf("SMTP Server: %s", string(buffer[:n]))
+    return nil
+}
+
+func main() {
+    // Настройки SMTP (пример для Gmail)
+    client := NewSMTPClient("smtp.gmail.com", 587, "your-email@gmail.com", "your-password", true)
+    
+    // Проверка подключения
+    if err := client.VerifyConnection(); err != nil {
+        fmt.Printf("Connection test failed: %v\n", err)
+        return
+    }
+    
+    // Создание email
+    email := &Email{
+        From:    "your-email@gmail.com",
+        To:      []string{"recipient@example.com"},
+        Subject: "Test Email from Go",
+        Body:    "This is a test email sent from Go program using SMTP.",
+    }
+    
+    // Отправка plain text email
+    if err := client.SendEmail(email); err != nil {
+        fmt.Printf("Error sending email: %v\n", err)
+    } else {
+        fmt.Println("Email sent successfully!")
+    }
+    
+    // Отправка HTML email
+    htmlEmail := `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Test Email</title>
+    </head>
+    <body>
+        <h1>Hello from Go!</h1>
+        <p>This is a <strong>HTML email</strong> sent from Go program.</p>
+        <p>Current time: ` + time.Now().Format(time.RFC1123) + `</p>
+    </body>
+    </html>`
+    
+    if err := client.SendHTMLEmail(email, htmlEmail); err != nil {
+        fmt.Printf("Error sending HTML email: %v\n", err)
+    } else {
+        fmt.Println("HTML email sent successfully!")
+    }
+}
+Задание: SMTP клиент для отправки email с поддержкой TLS и HTML
+
+144. Web crawler
+go
+package main
+import (
+    "fmt"
+    "golang.org/x/net/html"
+    "net/http"
+    "net/url"
+    "sync"
+    "time"
+)
+
+type Crawler struct {
+    visited   sync.Map
+    maxDepth  int
+    delay     time.Duration
+    userAgent string
+    mu        sync.Mutex
+}
+
+type Page struct {
+    URL   string
+    Title string
+    Links []string
+}
+
+func NewCrawler(maxDepth int, delay time.Duration) *Crawler {
+    return &Crawler{
+        maxDepth:  maxDepth,
+        delay:     delay,
+        userAgent: "GoWebCrawler/1.0",
+        visited:   sync.Map{},
+    }
+}
+
+func (c *Crawler) Crawl(startURL string) ([]*Page, error) {
+    var pages []*Page
+    var wg sync.WaitGroup
+    var mu sync.Mutex
+    
+    // Канал для ограничения параллелизма
+    semaphore := make(chan struct{}, 10)
+    
+    // Функция для рекурсивного crawling'а
+    var crawl func(string, int)
+    crawl = func(currentURL string, depth int) {
+        if depth > c.maxDepth {
+            return
+        }
+        
+        // Проверка, не посещали ли уже эту страницу
+        if _, visited := c.visited.LoadOrStore(currentURL, true); visited {
+            return
+        }
+        
+        // Ограничение параллелизма
+        semaphore <- struct{}{}
+        defer func() { <-semaphore }()
+        
+        // Задержка для соблюдения robots.txt
+        time.Sleep(c.delay)
+        
+        // Получение страницы
+        page, err := c.fetchPage(currentURL)
+        if err != nil {
+            fmt.Printf("Error fetching %s: %v\n", currentURL, err)
+            return
+        }
+        
+        mu.Lock()
+        pages = append(pages, page)
+        mu.Unlock()
+        
+        fmt.Printf("Crawled: %s (depth: %d, links: %d)\n", currentURL, depth, len(page.Links))
+        
+        // Рекурсивный обход ссылок
+        for _, link := range page.Links {
+            wg.Add(1)
+            go func(l string, d int) {
+                defer wg.Done()
+                crawl(l, d+1)
+            }(link, depth)
+        }
+    }
+    
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        crawl(startURL, 0)
+    }()
+    
+    wg.Wait()
+    return pages, nil
+}
+
+func (c *Crawler) fetchPage(pageURL string) (*Page, error) {
+    // Создание HTTP клиента
+    client := &http.Client{
+        Timeout: 10 * time.Second,
+    }
+    
+    // Создание запроса
+    req, err := http.NewRequest("GET", pageURL, nil)
+    if err != nil {
+        return nil, err
+    }
+    
+    // Установка User-Agent
+    req.Header.Set("User-Agent", c.userAgent)
+    
+    // Выполнение запроса
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+    
+    // Парсинг HTML
+    doc, err := html.Parse(resp.Body)
+    if err != nil {
+        return nil, err
+    }
+    
+    page := &Page{
+        URL: pageURL,
+    }
+    
+    // Извлечение данных
+    c.extractData(doc, page)
+    
+    return page, nil
+}
+
+func (c *Crawler) extractData(n *html.Node, page *Page) {
+    if n.Type == html.ElementNode {
+        switch n.Data {
+        case "title":
+            if n.FirstChild != nil {
+                page.Title = n.FirstChild.Data
+            }
+        case "a":
+            for _, attr := range n.Attr {
+                if attr.Key == "href" {
+                    absoluteURL := c.resolveURL(page.URL, attr.Val)
+                    if absoluteURL != "" {
+                        page.Links = append(page.Links, absoluteURL)
+                    }
+                    break
+                }
+            }
+        }
+    }
+    
+    for child := n.FirstChild; child != nil; child = child.NextSibling {
+        c.extractData(child, page)
+    }
+}
+
+func (c *Crawler) resolveURL(base, relative string) string {
+    baseURL, err := url.Parse(base)
+    if err != nil {
+        return ""
+    }
+    
+    relativeURL, err := url.Parse(relative)
+    if err != nil {
+        return ""
+    }
+    
+    resolvedURL := baseURL.ResolveReference(relativeURL)
+    
+    // Фильтрация URL (только HTTP/HTTPS)
+    if resolvedURL.Scheme != "http" && resolvedURL.Scheme != "https" {
+        return ""
+    }
+    
+    return resolvedURL.String()
+}
+
+func (c *Crawler) GenerateSitemap(pages []*Page) string {
+    var sitemap strings.Builder
+    
+    sitemap.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
+    sitemap.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+    
+    for _, page := range pages {
+        sitemap.WriteString("<url>")
+        sitemap.WriteString(fmt.Sprintf("<loc>%s</loc>", page.URL))
+        if page.Title != "" {
+            sitemap.WriteString(fmt.Sprintf("<title>%s</title>", page.Title))
+        }
+        sitemap.WriteString("</url>")
+    }
+    
+    sitemap.WriteString("</urlset>")
+    return sitemap.String()
+}
+
+func (c *Crawler) SaveResults(pages []*Page, filename string) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    for _, page := range pages {
+        fmt.Fprintf(file, "URL: %s\n", page.URL)
+        fmt.Fprintf(file, "Title: %s\n", page.Title)
+        fmt.Fprintf(file, "Links: %d\n", len(page.Links))
+        fmt.Fprintf(file, "---\n")
+    }
+    
+    return nil
+}
+
+func main() {
+    crawler := NewCrawler(2, 1*time.Second)
+    
+    startURL := "https://example.com"
+    
+    fmt.Printf("Starting crawl from: %s\n", startURL)
+    fmt.Printf("Max depth: %d, Delay: %v\n", crawler.maxDepth, crawler.delay)
+    
+    startTime := time.Now()
+    pages, err := crawler.Crawl(startURL)
+    elapsed := time.Since(startTime)
+    
+    if err != nil {
+        fmt.Printf("Crawl error: %v\n", err)
+        return
+    }
+    
+    fmt.Printf("\nCrawl completed in %v\n", elapsed)
+    fmt.Printf("Pages crawled: %d\n", len(pages))
+    
+    // Генерация sitemap
+    sitemap := crawler.GenerateSitemap(pages)
+    os.WriteFile("sitemap.xml", []byte(sitemap), 0644)
+    fmt.Println("Sitemap saved: sitemap.xml")
+    
+    // Сохранение результатов
+    crawler.SaveResults(pages, "crawl_results.txt")
+    fmt.Println("Results saved: crawl_results.txt")
+    
+    // Статистика
+    totalLinks := 0
+    for _, page := range pages {
+        totalLinks += len(page.Links)
+    }
+    
+    fmt.Printf("Total links found: %d\n", totalLinks)
+    fmt.Printf("Average links per page: %.2f\n", float64(totalLinks)/float64(len(pages)))
+}
+Задание: Веб-краулер с рекурсивным обходом и генерацией sitemap
+
+145. Distributed key-value store
+go
+package main
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+    "net"
+    "net/http"
+    "net/rpc"
+    "sync"
+    "time"
+)
+
+type KeyValue struct {
+    Key   string      `json:"key"`
+    Value interface{} `json:"value"`
+    Time  time.Time   `json:"timestamp"`
+}
+
+type Store struct {
+    data  map[string]*KeyValue
+    mutex sync.RWMutex
+}
+
+type StoreService struct {
+    store *Store
+}
+
+type PutArgs struct {
+    Key   string      `json:"key"`
+    Value interface{} `json:"value"`
+}
+
+type GetArgs struct {
+    Key string `json:"key"`
+}
+
+type GetReply struct {
+    Value *KeyValue `json:"value"`
+    Error string    `json:"error,omitempty"`
+}
+
+func NewStore() *Store {
+    return &Store{
+        data: make(map[string]*KeyValue),
+    }
+}
+
+func (s *Store) Put(key string, value interface{}) {
+    s.mutex.Lock()
+    defer s.mutex.Unlock()
+    
+    s.data[key] = &KeyValue{
+        Key:   key,
+        Value: value,
+        Time:  time.Now(),
+    }
+}
+
+func (s *Store) Get(key string) (*KeyValue, bool) {
+    s.mutex.RLock()
+    defer s.mutex.RUnlock()
+    
+    value, exists := s.data[key]
+    return value, exists
+}
+
+func (s *Store) Delete(key string) bool {
+    s.mutex.Lock()
+    defer s.mutex.Unlock()
+    
+    if _, exists := s.data[key]; exists {
+        delete(s.data, key)
+        return true
+    }
+    return false
+}
+
+func (s *Store) Keys() []string {
+    s.mutex.RLock()
+    defer s.mutex.RUnlock()
+    
+    keys := make([]string, 0, len(s.data))
+    for key := range s.data {
+        keys = append(keys, key)
+    }
+    return keys
+}
+
+func (s *Store) Size() int {
+    s.mutex.RLock()
+    defer s.mutex.RUnlock()
+    
+    return len(s.data)
+}
+
+func (ss *StoreService) Put(args *PutArgs, reply *bool) error {
+    ss.store.Put(args.Key, args.Value)
+    *reply = true
+    return nil
+}
+
+func (ss *StoreService) Get(args *GetArgs, reply *GetReply) error {
+    value, exists := ss.store.Get(args.Key)
+    if !exists {
+        reply.Error = "key not found"
+        return nil
+    }
+    
+    reply.Value = value
+    return nil
+}
+
+func (ss *StoreService) Delete(args *GetArgs, reply *bool) error {
+    *reply = ss.store.Delete(args.Key)
+    return nil
+}
+
+func (ss *StoreService) Keys(args struct{}, reply *[]string) error {
+    *reply = ss.store.Keys()
+    return nil
+}
+
+type Node struct {
+    ID      string
+    Address string
+    Store   *Store
+    Server  *rpc.Server
+}
+
+func NewNode(id, address string) *Node {
+    node := &Node{
+        ID:      id,
+        Address: address,
+        Store:   NewStore(),
+        Server:  rpc.NewServer(),
+    }
+    
+    // Регистрация RPC сервиса
+    storeService := &StoreService{store: node.Store}
+    node.Server.Register(storeService)
+    
+    return node
+}
+
+func (n *Node) Start() error {
+    listener, err := net.Listen("tcp", n.Address)
+    if err != nil {
+        return err
+    }
+    
+    log.Printf("Node %s listening on %s", n.ID, n.Address)
+    
+    // HTTP handler для RPC
+    http.Handle("/rpc", n.Server)
+    
+    return http.Serve(listener, nil)
+}
+
+func (n *Node) ConnectToNode(address string) (*rpc.Client, error) {
+    return rpc.DialHTTP("tcp", address)
+}
+
+type Cluster struct {
+    Nodes map[string]*Node
+    mutex sync.RWMutex
+}
+
+func NewCluster() *Cluster {
+    return &Cluster{
+        Nodes: make(map[string]*Node),
+    }
+}
+
+func (c *Cluster) AddNode(node *Node) {
+    c.mutex.Lock()
+    defer c.mutex.Unlock()
+    
+    c.Nodes[node.ID] = node
+}
+
+func (c *Cluster) RemoveNode(nodeID string) {
+    c.mutex.Lock()
+    defer c.mutex.Unlock()
+    
+    delete(c.Nodes, nodeID)
+}
+
+func (c *Cluster) ReplicatePut(key string, value interface{}) {
+    c.mutex.RLock()
+    defer c.mutex.RUnlock()
+    
+    for _, node := range c.Nodes {
+        go func(n *Node) {
+            client, err := n.ConnectToNode(n.Address)
+            if err != nil {
+                log.Printf("Failed to connect to node %s: %v", n.ID, err)
+                return
+            }
+            defer client.Close()
+            
+            args := &PutArgs{Key: key, Value: value}
+            var reply bool
+            err = client.Call("StoreService.Put", args, &reply)
+            if err != nil {
+                log.Printf("Failed to replicate to node %s: %v", n.ID, err)
+            }
+        }(node)
+    }
+}
+
+func (c *Cluster) GetFromAnyNode(key string) (*KeyValue, error) {
+    c.mutex.RLock()
+    defer c.mutex.RUnlock()
+    
+    for _, node := range c.Nodes {
+        client, err := node.ConnectToNode(node.Address)
+        if err != nil {
+            continue
+        }
+        defer client.Close()
+        
+        args := &GetArgs{Key: key}
+        var reply GetReply
+        err = client.Call("StoreService.Get", args, &reply)
+        if err == nil && reply.Error == "" {
+            return reply.Value, nil
+        }
+    }
+    
+    return nil, fmt.Errorf("key not found in any node")
+}
+
+func main() {
+    // Создание кластера
+    cluster := NewCluster()
+    
+    // Создание узлов
+    node1 := NewNode("node1", ":8081")
+    node2 := NewNode("node2", ":8082")
+    node3 := NewNode("node3", ":8083")
+    
+    // Добавление узлов в кластер
+    cluster.AddNode(node1)
+    cluster.AddNode(node2)
+    cluster.AddNode(node3)
+    
+    // Запуск узлов
+    for _, node := range cluster.Nodes {
+        go func(n *Node) {
+            if err := n.Start(); err != nil {
+                log.Printf("Node %s failed: %v", n.ID, err)
+            }
+        }(node)
+    }
+    
+    // Даем узлам время запуститься
+    time.Sleep(2 * time.Second)
+    
+    // Демонстрация работы
+    fmt.Println("=== Distributed Key-Value Store Demo ===")
+    
+    // Запись данных с репликацией
+    cluster.ReplicatePut("name", "Alice")
+    cluster.ReplicatePut("age", 30)
+    cluster.ReplicatePut("city", "New York")
+    
+    fmt.Println("Data replicated across cluster")
+    
+    // Чтение данных
+    value, err := cluster.GetFromAnyNode("name")
+    if err == nil {
+        fmt.Printf("Retrieved: %s = %v\n", value.Key, value.Value)
+    }
+    
+    value, err = cluster.GetFromAnyNode("age")
+    if err == nil {
+        fmt.Printf("Retrieved: %s = %v\n", value.Key, value.Value)
+    }
+    
+    // Статистика
+    fmt.Printf("Cluster size: %d nodes\n", len(cluster.Nodes))
+    
+    // Ожидание
+    select {}
+}
+Задание: Распределенное key-value хранилище с RPC
+
+146. Real-time collaboration сервер
+go
+package main
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "sync"
+    "time"
+    
+    "github.com/gorilla/websocket"
+)
+
+type Document struct {
+    ID      string    `json:"id"`
+    Content string    `json:"content"`
+    Version int       `json:"version"`
+    Created time.Time `json:"created"`
+    Updated time.Time `json:"updated"`
+}
+
+type Operation struct {
+    Type      string `json:"type"` // "insert", "delete", "cursor"
+    Position  int    `json:"position"`
+    Text      string `json:"text"`
+    ClientID  string `json:"clientId"`
+    Timestamp int64  `json:"timestamp"`
+}
+
+type Client struct {
+    ID       string
+    Document string
+    Conn     *websocket.Conn
+    Send     chan []byte
+}
+
+type CollaborationServer struct {
+    documents map[string]*Document
+    clients   map[string]*Client
+    mutex     sync.RWMutex
+    upgrader  websocket.Upgrader
+}
+
+func NewCollaborationServer() *CollaborationServer {
+    return &CollaborationServer{
+        documents: make(map[string]*Document),
+        clients:   make(map[string]*Client),
+        upgrader: websocket.Upgrader{
+            CheckOrigin: func(r *http.Request) bool { return true },
+        },
+    }
+}
+
+func (cs *CollaborationServer) CreateDocument(id string) *Document {
+    cs.mutex.Lock()
+    defer cs.mutex.Unlock()
+    
+    doc := &Document{
+        ID:      id,
+        Content: "",
+        Version: 0,
+        Created: time.Now(),
+        Updated: time.Now(),
+    }
+    
+    cs.documents[id] = doc
+    return doc
+}
+
+func (cs *CollaborationServer) GetDocument(id string) (*Document, bool) {
+    cs.mutex.RLock()
+    defer cs.mutex.RUnlock()
+    
+    doc, exists := cs.documents[id]
+    return doc, exists
+}
+
+func (cs *CollaborationServer) ApplyOperation(docID string, op *Operation) error {
+    cs.mutex.Lock()
+    defer cs.mutex.Unlock()
+    
+    doc, exists := cs.documents[docID]
+    if !exists {
+        return fmt.Errorf("document not found")
+    }
+    
+    // Применение операции к документу
+    switch op.Type {
+    case "insert":
+        if op.Position >= 0 && op.Position <= len(doc.Content) {
+            doc.Content = doc.Content[:op.Position] + op.Text + doc.Content[op.Position:]
+        }
+    case "delete":
+        if op.Position >= 0 && op.Position+len(op.Text) <= len(doc.Content) {
+            doc.Content = doc.Content[:op.Position] + doc.Content[op.Position+len(op.Text):]
+        }
+    }
+    
+    doc.Version++
+    doc.Updated = time.Now()
+    
+    // Рассылка операции всем клиентам
+    cs.broadcastToDocumentClients(docID, op)
+    
+    return nil
+}
+
+func (cs *CollaborationServer) RegisterClient(client *Client) {
+    cs.mutex.Lock()
+    defer cs.mutex.Unlock()
+    
+    cs.clients[client.ID] = client
+    log.Printf("Client %s connected to document %s", client.ID, client.Document)
+}
+
+func (cs *CollaborationServer) UnregisterClient(clientID string) {
+    cs.mutex.Lock()
+    defer cs.mutex.Unlock()
+    
+    if client, exists := cs.clients[clientID]; exists {
+        close(client.Send)
+        delete(cs.clients, clientID)
+        log.Printf("Client %s disconnected", clientID)
+    }
+}
+
+func (cs *CollaborationServer) broadcastToDocumentClients(docID string, op *Operation) {
+    message, err := json.Marshal(op)
+    if err != nil {
+        log.Printf("Error marshaling operation: %v", err)
+        return
+    }
+    
+    for _, client := range cs.clients {
+        if client.Document == docID {
+            select {
+            case client.Send <- message:
+            default:
+                close(client.Send)
+                delete(cs.clients, client.ID)
+            }
+        }
+    }
+}
+
+func (cs *CollaborationServer) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+    conn, err := cs.upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        log.Printf("WebSocket upgrade error: %v", err)
+        return
+    }
+    
+    // Параметры из query string
+    query := r.URL.Query()
+    docID := query.Get("doc")
+    clientID := query.Get("client")
+    
+    if docID == "" || clientID == "" {
+        conn.Close()
+        return
+    }
+    
+    // Создание или получение документа
+    doc, exists := cs.GetDocument(docID)
+    if !exists {
+        doc = cs.CreateDocument(docID)
+    }
+    
+    // Создание клиента
+    client := &Client{
+        ID:       clientID,
+        Document: docID,
+        Conn:     conn,
+        Send:     make(chan []byte, 256),
+    }
+    
+    cs.RegisterClient(client)
+    
+    // Запуск горутин для чтения и записи
+    go cs.writePump(client)
+    go cs.readPump(client)
+    
+    // Отправка текущего состояния документа
+    initialMessage := map[string]interface{}{
+        "type":    "document_state",
+        "content": doc.Content,
+        "version": doc.Version,
+    }
+    
+    message, _ := json.Marshal(initialMessage)
+    client.Send <- message
+}
+
+func (cs *CollaborationServer) writePump(client *Client) {
+    defer func() {
+        client.Conn.Close()
+        cs.UnregisterClient(client.ID)
+    }()
+    
+    for {
+        select {
+        case message, ok := <-client.Send:
+            if !ok {
+                client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+                return
+            }
+            
+            err := client.Conn.WriteMessage(websocket.TextMessage, message)
+            if err != nil {
+                return
+            }
+        }
+    }
+}
+
+func (cs *CollaborationServer) readPump(client *Client) {
+    defer func() {
+        client.Conn.Close()
+        cs.UnregisterClient(client.ID)
+    }()
+    
+    for {
+        _, message, err := client.Conn.ReadMessage()
+        if err != nil {
+            break
+        }
+        
+        var op Operation
+        if err := json.Unmarshal(message, &op); err != nil {
+            log.Printf("Error parsing operation: %v", err)
+            continue
+        }
+        
+        op.ClientID = client.ID
+        op.Timestamp = time.Now().UnixNano()
+        
+        // Применение операции
+        if err := cs.ApplyOperation(client.Document, &op); err != nil {
+            log.Printf("Error applying operation: %v", err)
+        }
+    }
+}
+
+func (cs *CollaborationServer) GetStats() map[string]interface{} {
+    cs.mutex.RLock()
+    defer cs.mutex.RUnlock()
+    
+    return map[string]interface{}{
+        "documents": len(cs.documents),
+        "clients":   len(cs.clients),
+    }
+}
+
+func main() {
+    server := NewCollaborationServer()
+    
+    // HTTP handlers
+    http.HandleFunc("/ws", server.HandleWebSocket)
+    http.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+        stats := server.GetStats()
+        json.NewEncoder(w).Encode(stats)
+    })
+    
+    http.HandleFunc("/documents/", func(w http.ResponseWriter, r *http.Request) {
+        docID := r.URL.Path[len("/documents/"):]
+        
+        switch r.Method {
+        case "GET":
+            if doc, exists := server.GetDocument(docID); exists {
+                json.NewEncoder(w).Encode(doc)
+            } else {
+                http.NotFound(w, r)
+            }
+        case "POST":
+            var doc Document
+            if err := json.NewDecoder(r.Body).Decode(&doc); err == nil {
+                server.CreateDocument(docID)
+                w.WriteHeader(http.StatusCreated)
+            }
+        }
+    })
+    
+    // Статический файл с демо
+    http.Handle("/", http.FileServer(http.Dir("./static")))
+    
+    log.Println("Collaboration server started on :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+Задание: Real-time collaboration сервер для совместного редактирования документов
+
+Это 146 примеров из 200. Продолжить с оставшимися 54 примерами? Они будут охватывать машинное обучение, компьютерное зрение, обработку естественного языка и другие AI-тематики.
+
+да
+Продолжаю с оставшимися 54 примерами, охватывающими AI и машинное обучение:
+
+Машинное обучение и AI
+147. Линейная регрессия
+go
+package main
+import (
+    "fmt"
+    "math"
+    "math/rand"
+)
+
+type LinearRegression struct {
+    weights []float64
+    bias    float64
+    lr      float64 // learning rate
+}
+
+func NewLinearRegression(features int, learningRate float64) *LinearRegression {
+    weights := make([]float64, features)
+    for i := range weights {
+        weights[i] = rand.Float64()*2 - 1 // Инициализация случайными значениями
+    }
+    
+    return &LinearRegression{
+        weights: weights,
+        bias:    rand.Float64()*2 - 1,
+        lr:      learningRate,
+    }
+}
+
+func (lr *LinearRegression) Predict(features []float64) float64 {
+    if len(features) != len(lr.weights) {
+        panic("Features count doesn't match weights count")
+    }
+    
+    prediction := lr.bias
+    for i, feature := range features {
+        prediction += feature * lr.weights[i]
+    }
+    return prediction
+}
+
+func (lr *LinearRegression) Train(features [][]float64, targets []float64, epochs int) {
+    if len(features) != len(targets) {
+        panic("Features and targets must have same length")
+    }
+    
+    for epoch := 0; epoch < epochs; epoch++ {
+        totalError := 0.0
+        
+        for i, sample := range features {
+            prediction := lr.Predict(sample)
+            error := prediction - targets[i]
+            totalError += error * error
+            
+            // Градиентный спуск
+            lr.bias -= lr.lr * error
+            for j := range lr.weights {
+                lr.weights[j] -= lr.lr * error * sample[j]
+            }
+        }
+        
+        if epoch%100 == 0 {
+            mse := totalError / float64(len(features))
+            fmt.Printf("Epoch %d, MSE: %.4f\n", epoch, mse)
+        }
+    }
+}
+
+func (lr *LinearRegression) RMSE(features [][]float64, targets []float64) float64 {
+    totalError := 0.0
+    for i, sample := range features {
+        prediction := lr.Predict(sample)
+        error := prediction - targets[i]
+        totalError += error * error
+    }
+    return math.Sqrt(totalError / float64(len(features)))
+}
+
+func (lr *LinearRegression) R2Score(features [][]float64, targets []float64) float64 {
+    meanTarget := 0.0
+    for _, target := range targets {
+        meanTarget += target
+    }
+    meanTarget /= float64(len(targets))
+    
+    totalSumSquares := 0.0
+    residualSumSquares := 0.0
+    
+    for i, sample := range features {
+        prediction := lr.Predict(sample)
+        totalSumSquares += (targets[i] - meanTarget) * (targets[i] - meanTarget)
+        residualSumSquares += (targets[i] - prediction) * (targets[i] - prediction)
+    }
+    
+    return 1 - (residualSumSquares / totalSumSquares)
+}
+
+func main() {
+    // Генерация синтетических данных
+    rand.Seed(42)
+    nSamples := 1000
+    nFeatures := 3
+    
+    features := make([][]float64, nSamples)
+    targets := make([]float64, nSamples)
+    
+    // Истинные веса для генерации данных
+    trueWeights := []float64{2.5, -1.8, 0.7}
+    trueBias := 3.2
+    
+    for i := 0; i < nSamples; i++ {
+        sample := make([]float64, nFeatures)
+        for j := 0; j < nFeatures; j++ {
+            sample[j] = rand.Float64()*10 - 5 // Значения от -5 до 5
+        }
+        features[i] = sample
+        
+        // Генерация целевой переменной с небольшим шумом
+        target := trueBias
+        for j := 0; j < nFeatures; j++ {
+            target += sample[j] * trueWeights[j]
+        }
+        target += rand.NormFloat64() * 0.5 // Добавление шума
+        targets[i] = target
+    }
+    
+    // Разделение на обучающую и тестовую выборки
+    splitIdx := int(0.8 * float64(nSamples))
+    trainFeatures := features[:splitIdx]
+    trainTargets := targets[:splitIdx]
+    testFeatures := features[splitIdx:]
+    testTargets := targets[splitIdx:]
+    
+    // Создание и обучение модели
+    model := NewLinearRegression(nFeatures, 0.01)
+    fmt.Println("Training linear regression...")
+    model.Train(trainFeatures, trainTargets, 1000)
+    
+    // Оценка модели
+    trainRMSE := model.RMSE(trainFeatures, trainTargets)
+    testRMSE := model.RMSE(testFeatures, testTargets)
+    r2 := model.R2Score(testFeatures, testTargets)
+    
+    fmt.Printf("\nModel Evaluation:\n")
+    fmt.Printf("Train RMSE: %.4f\n", trainRMSE)
+    fmt.Printf("Test RMSE: %.4f\n", testRMSE)
+    fmt.Printf("R² Score: %.4f\n", r2)
+    
+    fmt.Printf("\nTrue weights: %v, bias: %.2f\n", trueWeights, trueBias)
+    fmt.Printf("Learned weights: %v, bias: %.2f\n", model.weights, model.bias)
+    
+    // Прогнозирование на новых данных
+    newSample := []float64{1.0, -2.0, 0.5}
+    prediction := model.Predict(newSample)
+    fmt.Printf("\nPrediction for %v: %.2f\n", newSample, prediction)
+}
+Задание: Реализация линейной регрессии с градиентным спуском
+
+148. K-ближайших соседей (KNN)
+go
+package main
+import (
+    "fmt"
+    "math"
+    "sort"
+)
+
+type Point struct {
+    Features []float64
+    Label    string
+    Distance float64
+}
+
+type KNN struct {
+    k      int
+    points []Point
+}
+
+func NewKNN(k int) *KNN {
+    return &KNN{
+        k: k,
+    }
+}
+
+func (knn *KNN) Fit(points []Point) {
+    knn.points = make([]Point, len(points))
+    copy(knn.points, points)
+}
+
+func (knn *KNN) euclideanDistance(a, b []float64) float64 {
+    if len(a) != len(b) {
+        panic("Feature dimensions must match")
+    }
+    
+    sum := 0.0
+    for i := range a {
+        diff := a[i] - b[i]
+        sum += diff * diff
+    }
+    return math.Sqrt(sum)
+}
+
+func (knn *KNN) Predict(features []float64) string {
+    // Вычисление расстояний до всех точек
+    for i := range knn.points {
+        knn.points[i].Distance = knn.euclideanDistance(knn.points[i].Features, features)
+    }
+    
+    // Сортировка по расстоянию
+    sortedPoints := make([]Point, len(knn.points))
+    copy(sortedPoints, knn.points)
+    sort.Slice(sortedPoints, func(i, j int) bool {
+        return sortedPoints[i].Distance < sortedPoints[j].Distance
+    })
+    
+    // Выбор k ближайших соседей
+    kNeighbors := sortedPoints[:knn.k]
+    
+    // Голосование
+    votes := make(map[string]int)
+    for _, neighbor := range kNeighbors {
+        votes[neighbor.Label]++
+    }
+    
+    // Нахождение наиболее частого класса
+    maxVotes := 0
+    predictedLabel := ""
+    for label, count := range votes {
+        if count > maxVotes {
+            maxVotes = count
+            predictedLabel = label
+        }
+    }
+    
+    return predictedLabel
+}
+
+func (knn *KNN) PredictWithConfidence(features []float64) (string, float64) {
+    for i := range knn.points {
+        knn.points[i].Distance = knn.euclideanDistance(knn.points[i].Features, features)
+    }
+    
+    sortedPoints := make([]Point, len(knn.points))
+    copy(sortedPoints, knn.points)
+    sort.Slice(sortedPoints, func(i, j int) bool {
+        return sortedPoints[i].Distance < sortedPoints[j].Distance
+    })
+    
+    kNeighbors := sortedPoints[:knn.k]
+    
+    votes := make(map[string]int)
+    for _, neighbor := range kNeighbors {
+        votes[neighbor.Label]++
+    }
+    
+    maxVotes := 0
+    predictedLabel := ""
+    for label, count := range votes {
+        if count > maxVotes {
+            maxVotes = count
+            predictedLabel = label
+        }
+    }
+    
+    confidence := float64(maxVotes) / float64(knn.k)
+    return predictedLabel, confidence
+}
+
+func (knn *KNN) Accuracy(testPoints []Point) float64 {
+    correct := 0
+    for _, point := range testPoints {
+        prediction := knn.Predict(point.Features)
+        if prediction == point.Label {
+            correct++
+        }
+    }
+    return float64(correct) / float64(len(testPoints))
+}
+
+func main() {
+    // Создание синтетических данных (классификация ирисов)
+    points := []Point{
+        {Features: []float64{5.1, 3.5, 1.4, 0.2}, Label: "setosa"},
+        {Features: []float64{4.9, 3.0, 1.4, 0.2}, Label: "setosa"},
+        {Features: []float64{4.7, 3.2, 1.3, 0.2}, Label: "setosa"},
+        {Features: []float64{7.0, 3.2, 4.7, 1.4}, Label: "versicolor"},
+        {Features: []float64{6.4, 3.2, 4.5, 1.5}, Label: "versicolor"},
+        {Features: []float64{6.9, 3.1, 4.9, 1.5}, Label: "versicolor"},
+        {Features: []float64{6.3, 3.3, 6.0, 2.5}, Label: "virginica"},
+        {Features: []float64{5.8, 2.7, 5.1, 1.9}, Label: "virginica"},
+        {Features: []float64{7.1, 3.0, 5.9, 2.1}, Label: "virginica"},
+    }
+    
+    // Тестовые данные
+    testPoints := []Point{
+        {Features: []float64{5.0, 3.6, 1.4, 0.3}, Label: "setosa"},
+        {Features: []float64{6.5, 3.0, 4.6, 1.5}, Label: "versicolor"},
+        {Features: []float64{6.0, 2.7, 5.1, 1.6}, Label: "virginica"},
+    }
+    
+    // Создание и обучение KNN
+    knn := NewKNN(3)
+    knn.Fit(points)
+    
+    fmt.Println("K-Nearest Neighbors Classification")
+    fmt.Printf("Training points: %d\n", len(points))
+    fmt.Printf("K: %d\n", knn.k)
+    
+    // Прогнозирование
+    fmt.Println("\nPredictions:")
+    for i, testPoint := range testPoints {
+        prediction, confidence := knn.PredictWithConfidence(testPoint.Features)
+        fmt.Printf("Test %d: Predicted: %s, Actual: %s, Confidence: %.2f\n", 
+            i+1, prediction, testPoint.Label, confidence)
+    }
+    
+    // Оценка точности
+    accuracy := knn.Accuracy(testPoints)
+    fmt.Printf("\nAccuracy: %.2f%%\n", accuracy*100)
+    
+    // Поиск оптимального K
+    fmt.Println("\nFinding optimal K:")
+    for k := 1; k <= 5; k++ {
+        testKNN := NewKNN(k)
+        testKNN.Fit(points)
+        acc := testKNN.Accuracy(testPoints)
+        fmt.Printf("K=%d, Accuracy=%.2f%%\n", k, acc*100)
+    }
+}
+Задание: Алгоритм K-ближайших соседей для классификации
+
+149. Дерево решений
+go
+package main
+import (
+    "fmt"
+    "math"
+)
+
+type DecisionTreeNode struct {
+    IsLeaf     bool
+    Class      string
+    FeatureIdx int
+    Threshold  float64
+    Left       *DecisionTreeNode
+    Right      *DecisionTreeNode
+}
+
+type DecisionTree struct {
+    Root       *DecisionTreeNode
+    MaxDepth   int
+    MinSamples int
+}
+
+type Dataset struct {
+    Features [][]float64
+    Labels   []string
+}
+
+func NewDecisionTree(maxDepth, minSamples int) *DecisionTree {
+    return &DecisionTree{
+        MaxDepth:   maxDepth,
+        MinSamples: minSamples,
+    }
+}
+
+func (dt *DecisionTree) Fit(features [][]float64, labels []string) {
+    dataset := Dataset{Features: features, Labels: labels}
+    dt.Root = dt.buildTree(dataset, 0)
+}
+
+func (dt *DecisionTree) buildTree(dataset Dataset, depth int) *DecisionTreeNode {
+    // Критерии остановки
+    if depth >= dt.MaxDepth || len(dataset.Labels) <= dt.MinSamples || dt.isPure(dataset.Labels) {
+        return &DecisionTreeNode{
+            IsLeaf: true,
+            Class:  dt.majorityClass(dataset.Labels),
+        }
+    }
+    
+    // Поиск лучшего разделения
+    bestFeature, bestThreshold, bestGain := dt.findBestSplit(dataset)
+    if bestGain == 0 {
+        return &DecisionTreeNode{
+            IsLeaf: true,
+            Class:  dt.majorityClass(dataset.Labels),
+        }
+    }
+    
+    // Разделение данных
+    leftData, rightData := dt.splitDataset(dataset, bestFeature, bestThreshold)
+    
+    // Рекурсивное построение дерева
+    node := &DecisionTreeNode{
+        IsLeaf:     false,
+        FeatureIdx: bestFeature,
+        Threshold:  bestThreshold,
+    }
+    
+    node.Left = dt.buildTree(leftData, depth+1)
+    node.Right = dt.buildTree(rightData, depth+1)
+    
+    return node
+}
+
+func (dt *DecisionTree) isPure(labels []string) bool {
+    if len(labels) == 0 {
+        return true
+    }
+    first := labels[0]
+    for _, label := range labels[1:] {
+        if label != first {
+            return false
+        }
+    }
+    return true
+}
+
+func (dt *DecisionTree) majorityClass(labels []string) string {
+    counts := make(map[string]int)
+    for _, label := range labels {
+        counts[label]++
+    }
+    
+    maxCount := 0
+    majority := ""
+    for label, count := range counts {
+        if count > maxCount {
+            maxCount = count
+            majority = label
+        }
+    }
+    return majority
+}
+
+func (dt *DecisionTree) entropy(labels []string) float64 {
+    if len(labels) == 0 {
+        return 0
+    }
+    
+    counts := make(map[string]int)
+    for _, label := range labels {
+        counts[label]++
+    }
+    
+    entropy := 0.0
+    for _, count := range counts {
+        probability := float64(count) / float64(len(labels))
+        entropy -= probability * math.Log2(probability)
+    }
+    return entropy
+}
+
+func (dt *DecisionTree) informationGain(parent []string, left []string, right []string) float64 {
+    parentEntropy := dt.entropy(parent)
+    
+    weightLeft := float64(len(left)) / float64(len(parent))
+    weightRight := float64(len(right)) / float64(len(parent))
+    
+    childrenEntropy := weightLeft*dt.entropy(left) + weightRight*dt.entropy(right)
+    return parentEntropy - childrenEntropy
+}
+
+func (dt *DecisionTree) findBestSplit(dataset Dataset) (int, float64, float64) {
+    bestGain := 0.0
+    bestFeature := -1
+    bestThreshold := 0.0
+    
+    nFeatures := len(dataset.Features[0])
+    
+    for featureIdx := 0; featureIdx < nFeatures; featureIdx++ {
+        // Получение уникальных значений для признака
+        values := make([]float64, len(dataset.Features))
+        for i, sample := range dataset.Features {
+            values[i] = sample[featureIdx]
+        }
+        
+        // Попробовать различные пороги
+        for _, threshold := range values {
+            leftLabels, rightLabels := dt.splitLabels(dataset, featureIdx, threshold)
+            
+            gain := dt.informationGain(dataset.Labels, leftLabels, rightLabels)
+            if gain > bestGain {
+                bestGain = gain
+                bestFeature = featureIdx
+                bestThreshold = threshold
+            }
+        }
+    }
+    
+    return bestFeature, bestThreshold, bestGain
+}
+
+func (dt *DecisionTree) splitLabels(dataset Dataset, featureIdx int, threshold float64) ([]string, []string) {
+    var leftLabels, rightLabels []string
+    
+    for i, sample := range dataset.Features {
+        if sample[featureIdx] <= threshold {
+            leftLabels = append(leftLabels, dataset.Labels[i])
+        } else {
+            rightLabels = append(rightLabels, dataset.Labels[i])
+        }
+    }
+    
+    return leftLabels, rightLabels
+}
+
+func (dt *DecisionTree) splitDataset(dataset Dataset, featureIdx int, threshold float64) (Dataset, Dataset) {
+    var leftData, rightData Dataset
+    
+    for i, sample := range dataset.Features {
+        newSample := make([]float64, len(sample))
+        copy(newSample, sample)
+        
+        if sample[featureIdx] <= threshold {
+            leftData.Features = append(leftData.Features, newSample)
+            leftData.Labels = append(leftData.Labels, dataset.Labels[i])
+        } else {
+            rightData.Features = append(rightData.Features, newSample)
+            rightData.Labels = append(rightData.Labels, dataset.Labels[i])
+        }
+    }
+    
+    return leftData, rightData
+}
+
+func (dt *DecisionTree) Predict(features []float64) string {
+    return dt.traverseTree(dt.Root, features)
+}
+
+func (dt *DecisionTree) traverseTree(node *DecisionTreeNode, features []float64) string {
+    if node.IsLeaf {
+        return node.Class
+    }
+    
+    if features[node.FeatureIdx] <= node.Threshold {
+        return dt.traverseTree(node.Left, features)
+    } else {
+        return dt.traverseTree(node.Right, features)
+    }
+}
+
+func (dt *DecisionTree) Print() {
+    dt.printNode(dt.Root, 0)
+}
+
+func (dt *DecisionTree) printNode(node *DecisionTreeNode, depth int) {
+    indent := ""
+    for i := 0; i < depth; i++ {
+        indent += "  "
+    }
+    
+    if node.IsLeaf {
+        fmt.Printf("%sLeaf: %s\n", indent, node.Class)
+    } else {
+        fmt.Printf("%sFeature[%d] <= %.2f\n", indent, node.FeatureIdx, node.Threshold)
+        dt.printNode(node.Left, depth+1)
+        dt.printNode(node.Right, depth+1)
+    }
+}
+
+func main() {
+    // Данные для классификации (погода -> играть в теннис)
+    features := [][]float64{
+        {1, 1, 1, 1}, // солнечно, жарко, высокая, слабый
+        {1, 1, 1, 2}, // солнечно, жарко, высокая, сильный
+        {2, 1, 1, 1}, // пасмурно, жарко, высокая, слабый
+        {3, 2, 1, 1}, // дождь, умеренно, высокая, слабый
+        {3, 3, 2, 1}, // дождь, холодно, нормальная, слабый
+        {3, 3, 2, 2}, // дождь, холодно, нормальная, сильный
+        {2, 3, 2, 2}, // пасмурно, холодно, нормальная, сильный
+        {1, 2, 1, 1}, // солнечно, умеренно, высокая, слабый
+        {1, 3, 2, 1}, // солнечно, холодно, нормальная, слабый
+        {3, 2, 2, 1}, // дождь, умеренно, нормальная, слабый
+        {1, 2, 2, 2}, // солнечно, умеренно, нормальная, сильный
+        {2, 2, 1, 2}, // пасмурно, умеренно, высокая, сильный
+        {2, 1, 2, 1}, // пасмурно, жарко, нормальная, слабый
+        {3, 2, 1, 2}, // дождь, умеренно, высокая, сильный
+    }
+    
+    labels := []string{
+        "no", "no", "yes", "yes", "yes", "no", "yes", "no", "yes", "yes", "yes", "yes", "yes", "no",
+    }
+    
+    // Создание и обучение дерева решений
+    tree := NewDecisionTree(5, 2)
+    tree.Fit(features, labels)
+    
+    fmt.Println("Decision Tree Structure:")
+    tree.Print()
+    
+    // Прогнозирование
+    testCases := [][]float64{
+        {1, 1, 1, 1}, // солнечно, жарко, высокая, слабый -> no
+        {3, 2, 2, 1}, // дождь, умеренно, нормальная, слабый -> yes
+        {2, 2, 2, 2}, // пасмурно, умеренно, нормальная, сильный -> ?
+    }
+    
+    fmt.Println("\nPredictions:")
+    for i, testCase := range testCases {
+        prediction := tree.Predict(testCase)
+        fmt.Printf("Test case %d: %v -> %s\n", i+1, testCase, prediction)
+    }
+    
+    // Оценка точности на обучающих данных
+    correct := 0
+    for i, sample := range features {
+        prediction := tree.Predict(sample)
+        if prediction == labels[i] {
+            correct++
+        }
+    }
+    accuracy := float64(correct) / float64(len(features))
+    fmt.Printf("\nTraining accuracy: %.2f%%\n", accuracy*100)
+}
+Задание: Дерево решений для классификации с использованием Information Gain
+
+150. K-средних (K-means) кластеризация
+go
+package main
+import (
+    "fmt"
+    "math"
+    "math/rand"
+)
+
+type Point struct {
+    X, Y float64
+    Cluster int
+}
+
+type KMeans struct {
+    K        int
+    Points   []Point
+    Centroids []Point
+    MaxIter  int
+}
+
+func NewKMeans(k int, maxIter int) *KMeans {
+    return &KMeans{
+        K:       k,
+        MaxIter: maxIter,
+    }
+}
+
+func (km *KMeans) Initialize(points []Point) {
+    km.Points = make([]Point, len(points))
+    copy(km.Points, points)
+    
+    // Инициализация центроидов случайными точками
+    km.Centroids = make([]Point, km.K)
+    used := make(map[int]bool)
+    
+    for i := 0; i < km.K; i++ {
+        for {
+            idx := rand.Intn(len(km.Points))
+            if !used[idx] {
+                km.Centroids[i] = Point{
+                    X: km.Points[idx].X,
+                    Y: km.Points[idx].Y,
+                    Cluster: i,
+                }
+                used[idx] = true
+                break
+            }
+        }
+    }
+}
+
+func (km *KMeans) EuclideanDistance(p1, p2 Point) float64 {
+    dx := p1.X - p2.X
+    dy := p1.Y - p2.Y
+    return math.Sqrt(dx*dx + dy*dy)
+}
+
+func (km *KMeans) AssignClusters() bool {
+    changed := false
+    
+    for i := range km.Points {
+        minDist := math.MaxFloat64
+        closestCluster := -1
+        
+        for j, centroid := range km.Centroids {
+            dist := km.EuclideanDistance(km.Points[i], centroid)
+            if dist < minDist {
+                minDist = dist
+                closestCluster = j
+            }
+        }
+        
+        if km.Points[i].Cluster != closestCluster {
+            km.Points[i].Cluster = closestCluster
+            changed = true
+        }
+    }
+    
+    return changed
+}
+
+func (km *KMeans) UpdateCentroids() {
+    // Сброс центроидов
+    for i := range km.Centroids {
+        km.Centroids[i].X = 0
+        km.Centroids[i].Y = 0
+    }
+    
+    // Суммирование координат по кластерам
+    counts := make([]int, km.K)
+    for _, point := range km.Points {
+        cluster := point.Cluster
+        km.Centroids[cluster].X += point.X
+        km.Centroids[cluster].Y += point.Y
+        counts[cluster]++
+    }
+    
+    // Вычисление новых центроидов
+    for i := range km.Centroids {
+        if counts[i] > 0 {
+            km.Centroids[i].X /= float64(counts[i])
+            km.Centroids[i].Y /= float64(counts[i])
+        }
+    }
+}
+
+func (km *KMeans) Fit() {
+    for iter := 0; iter < km.MaxIter; iter++ {
+        changed := km.AssignClusters()
+        km.UpdateCentroids()
+        
+        if !changed {
+            fmt.Printf("Converged after %d iterations\n", iter+1)
+            break
+        }
+        
+        if iter == km.MaxIter-1 {
+            fmt.Printf("Reached maximum iterations: %d\n", km.MaxIter)
+        }
+    }
+}
+
+func (km *KMeans) WCSS() float64 {
+    total := 0.0
+    for _, point := range km.Points {
+        centroid := km.Centroids[point.Cluster]
+        dist := km.EuclideanDistance(point, centroid)
+        total += dist * dist
+    }
+    return total
+}
+
+func (km *KMeans) SilhouetteScore() float64 {
+    if km.K <= 1 {
+        return 0
+    }
+    
+    totalScore := 0.0
+    
+    for i, point := range km.Points {
+        // Среднее расстояние до точек в своем кластере
+        a := 0.0
+        countA := 0
+        
+        for j, other := range km.Points {
+            if i != j && point.Cluster == other.Cluster {
+                dist := km.EuclideanDistance(point, other)
+                a += dist
+                countA++
+            }
+        }
+        
+        if countA > 0 {
+            a /= float64(countA)
+        }
+        
+        // Среднее расстояние до точек в ближайшем соседнем кластере
+        b := math.MaxFloat64
+        
+        for cluster := 0; cluster < km.K; cluster++ {
+            if cluster == point.Cluster {
+                continue
+            }
+            
+            clusterDist := 0.0
+            countB := 0
+            
+            for _, other := range km.Points {
+                if other.Cluster == cluster {
+                    dist := km.EuclideanDistance(point, other)
+                    clusterDist += dist
+                    countB++
+                }
+            }
+            
+            if countB > 0 {
+                clusterDist /= float64(countB)
+                if clusterDist < b {
+                    b = clusterDist
+                }
+            }
+        }
+        
+        // Silhouette score для точки
+        if a < b {
+            totalScore += 1 - a/b
+        } else if a > b {
+            totalScore += b/a - 1
+        }
+        // если a == b, score = 0
+    }
+    
+    return totalScore / float64(len(km.Points))
+}
+
+func (km *KMeans) PrintResults() {
+    fmt.Printf("\nK-Means Clustering Results (K=%d)\n", km.K)
+    fmt.Printf("Within-Cluster Sum of Squares: %.4f\n", km.WCSS())
+    fmt.Printf("Silhouette Score: %.4f\n", km.SilhouetteScore())
+    
+    fmt.Println("\nCentroids:")
+    for i, centroid := range km.Centroids {
+        fmt.Printf("Cluster %d: (%.2f, %.2f)\n", i, centroid.X, centroid.Y)
+    }
+    
+    fmt.Println("\nCluster sizes:")
+    counts := make([]int, km.K)
+    for _, point := range km.Points {
+        counts[point.Cluster]++
+    }
+    for i, count := range counts {
+        fmt.Printf("Cluster %d: %d points\n", i, count)
+    }
+}
+
+func main() {
+    // Генерация синтетических данных
+    rand.Seed(42)
+    nPoints := 300
+    points := make([]Point, nPoints)
+    
+    // Генерация данных из трех кластеров
+    for i := 0; i < nPoints; i++ {
+        cluster := i % 3
+        var x, y float64
+        
+        switch cluster {
+        case 0:
+            x = rand.NormFloat64()*0.5 + 2.0
+            y = rand.NormFloat64()*0.5 + 2.0
+        case 1:
+            x = rand.NormFloat64()*0.5 + 5.0
+            y = rand.NormFloat64()*0.5 + 5.0
+        case 2:
+            x = rand.NormFloat64()*0.5 + 8.0
+            y = rand.NormFloat64()*0.5 + 2.0
+        }
+        
+        points[i] = Point{X: x, Y: y, Cluster: -1}
+    }
+    
+    // Поиск оптимального K с использованием метода локтя
+    fmt.Println("Finding optimal K using elbow method:")
+    bestK := 1
+    bestScore := math.MaxFloat64
+    
+    for k := 1; k <= 6; k++ {
+        kmeans := NewKMeans(k, 100)
+        kmeans.Initialize(points)
+        kmeans.Fit()
+        wcss := kmeans.WCSS()
+        
+        fmt.Printf("K=%d, WCSS=%.4f\n", k, wcss)
+        
+        if k > 1 {
+            // Простой метод локтя: ищем "изгиб" в графике WCSS
+            improvement := bestScore - wcss
+            if improvement < bestScore*0.1 { // Если улучшение менее 10%
+                fmt.Printf("Elbow found at K=%d\n", k-1)
+                break
+            }
+        }
+        
+        bestK = k
+        bestScore = wcss
+    }
+    
+    // Запуск с оптимальным K
+    fmt.Printf("\nRunning K-Means with K=%d\n", bestK)
+    kmeans := NewKMeans(bestK, 100)
+    kmeans.Initialize(points)
+    kmeans.Fit()
+    kmeans.PrintResults()
+    
+    // Визуализация (псевдографика)
+    fmt.Println("\nCluster visualization (approximate):")
+    km.Visualize(10, 10)
+}
+
+func (km *KMeans) Visualize(width, height int) {
+    // Нахождение границ данных
+    minX, maxX := math.MaxFloat64, -math.MaxFloat64
+    minY, maxY := math.MaxFloat64, -math.MaxFloat64
+    
+    for _, point := range km.Points {
+        if point.X < minX {
+            minX = point.X
+        }
+        if point.X > maxX {
+            maxX = point.X
+        }
+        if point.Y < minY {
+            minY = point.Y
+        }
+        if point.Y > maxY {
+            maxY = point.Y
+        }
+    }
+    
+    // Создание сетки
+    grid := make([][]int, height)
+    for i := range grid {
+        grid[i] = make([]int, width)
+        for j := range grid[i] {
+            grid[i][j] = -1
+        }
+    }
+    
+    // Отображение точек на сетку
+    for _, point := range km.Points {
+        x := int((point.X - minX) / (maxX - minX) * float64(width-1))
+        y := int((point.Y - minY) / (maxY - minY) * float64(height-1))
+        
+        if x >= 0 && x < width && y >= 0 && y < height {
+            grid[y][x] = point.Cluster
+        }
+    }
+    
+    // Вывод сетки
+    symbols := []string{"·", "○", "●", "▲", "■", "★"}
+    
+    for y := 0; y < height; y++ {
+        for x := 0; x < width; x++ {
+            cluster := grid[y][x]
+            if cluster == -1 {
+                fmt.Print(" ")
+            } else {
+                symbol := symbols[cluster%len(symbols)]
+                fmt.Print(symbol)
+            }
+        }
+        fmt.Println()
+    }
+}
+Задание: Алгоритм K-средних для кластеризации с методом локтя
+
+151. Обработка естественного языка (NLP) - базовые методы
+go
+package main
+import (
+    "fmt"
+    "regexp"
+    "sort"
+    "strings"
+    "unicode"
+)
+
+type TextProcessor struct {
+    stopWords map[string]bool
+}
+
+func NewTextProcessor() *TextProcessor {
+    stopWords := map[string]bool{
+        "the": true, "a": true, "an": true, "and": true, "or": true, "but": true,
+        "in": true, "on": true, "at": true, "to": true, "for": true, "of": true,
+        "with": true, "by": true, "is": true, "are": true, "was": true, "were": true,
+        "be": true, "been": true, "being": true, "have": true, "has": true, "had": true,
+        "do": true, "does": true, "did": true, "will": true, "would": true, "could": true,
+        "should": true, "may": true, "might": true, "must": true, "can": true,
+    }
+    
+    return &TextProcessor{stopWords: stopWords}
+}
+
+func (tp *TextProcessor) CleanText(text string) string {
+    // Приведение к нижнему регистру
+    text = strings.ToLower(text)
+    
+    // Удаление специальных символов, оставляем только буквы и пробелы
+    reg := regexp.MustCompile(`[^a-zA-Z\s]`)
+    text = reg.ReplaceAllString(text, " ")
+    
+    // Удаление лишних пробелов
+    reg = regexp.MustCompile(`\s+`)
+    text = reg.ReplaceAllString(text, " ")
+    
+    return strings.TrimSpace(text)
+}
+
+func (tp *TextProcessor) Tokenize(text string) []string {
+    return strings.Fields(text)
+}
+
+func (tp *TextProcessor) RemoveStopWords(tokens []string) []string {
+    var filtered []string
+    for _, token := range tokens {
+        if !tp.stopWords[token] {
+            filtered = append(filtered, token)
+        }
+    }
+    return filtered
+}
+
+func (tp *TextProcessor) Stem(word string) string {
+    // Простой стеммер (Porter stemmer упрощенный)
+    if len(word) < 3 {
+        return word
+    }
+    
+    // Удаление окончаний
+    suffixes := []string{"ing", "ed", "ly", "es", "s"}
+    for _, suffix := range suffixes {
+        if strings.HasSuffix(word, suffix) {
+            word = word[:len(word)-len(suffix)]
+            break
+        }
+    }
+    
+    return word
+}
+
+func (tp *TextProcessor) StemTokens(tokens []string) []string {
+    stemmed := make([]string, len(tokens))
+    for i, token := range tokens {
+        stemmed[i] = tp.Stem(token)
+    }
+    return stemmed
+}
+
+type TFIDFVectorizer struct {
+    vocabulary map[string]int
+    idf        map[string]float64
+    documents  [][]string
+}
+
+func NewTFIDFVectorizer() *TFIDFVectorizer {
+    return &TFIDFVectorizer{
+        vocabulary: make(map[string]int),
+        idf:        make(map[string]float64),
+    }
+}
+
+func (tv *TFIDFVectorizer) Fit(documents []string) {
+    // Очистка и токенизация документов
+    processor := NewTextProcessor()
+    tv.documents = make([][]string, len(documents))
+    
+    for i, doc := range documents {
+        cleaned := processor.CleanText(doc)
+        tokens := processor.Tokenize(cleaned)
+        tokens = processor.RemoveStopWords(tokens)
+        tokens = processor.StemTokens(tokens)
+        tv.documents[i] = tokens
+    }
+    
+    // Построение словаря
+    tv.buildVocabulary()
+    
+    // Вычисление IDF
+    tv.calculateIDF()
+}
+
+func (tv *TFIDFVectorizer) buildVocabulary() {
+    index := 0
+    for _, tokens := range tv.documents {
+        for _, token := range tokens {
+            if _, exists := tv.vocabulary[token]; !exists {
+                tv.vocabulary[token] = index
+                index++
+            }
+        }
+    }
+}
+
+func (tv *TFIDFVectorizer) calculateIDF() {
+    n := float64(len(tv.documents))
+    
+    for term := range tv.vocabulary {
+        docCount := 0
+        for _, tokens := range tv.documents {
+            for _, token := range tokens {
+                if token == term {
+                    docCount++
+                    break
+                }
+            }
+        }
+        
+        tv.idf[term] = math.Log(n / float64(docCount))
+    }
+}
+
+func (tv *TFIDFVectorizer) Transform(documents []string) [][]float64 {
+    processor := NewTextProcessor()
+    vectors := make([][]float64, len(documents))
+    
+    for i, doc := range documents {
+        // Предобработка документа
+        cleaned := processor.CleanText(doc)
+        tokens := processor.Tokenize(cleaned)
+        tokens = processor.RemoveStopWords(tokens)
+        tokens = processor.StemTokens(tokens)
+        
+        // Вычисление TF
+        tf := make(map[string]float64)
+        for _, token := range tokens {
+            tf[token]++
+        }
+        
+        // Нормализация TF
+        totalTerms := float64(len(tokens))
+        for term := range tf {
+            tf[term] /= totalTerms
+        }
+        
+        // Создание вектора TF-IDF
+        vector := make([]float64, len(tv.vocabulary))
+        for term, tfValue := range tf {
+            if idfValue, exists := tv.idf[term]; exists {
+                index := tv.vocabulary[term]
+                vector[index] = tfValue * idfValue
+            }
+        }
+        
+        vectors[i] = vector
+    }
+    
+    return vectors
+}
+
+func (tv *TFIDFVectorizer) CosineSimilarity(vec1, vec2 []float64) float64 {
+    dotProduct := 0.0
+    norm1 := 0.0
+    norm2 := 0.0
+    
+    for i := range vec1 {
+        dotProduct += vec1[i] * vec2[i]
+        norm1 += vec1[i] * vec1[i]
+        norm2 += vec2[i] * vec2[i]
+    }
+    
+    if norm1 == 0 || norm2 == 0 {
+        return 0
+    }
+    
+    return dotProduct / (math.Sqrt(norm1) * math.Sqrt(norm2))
+}
+
+type NaiveBayesClassifier struct {
+    classProbabilities map[string]float64
+    featureProbabilities map[string]map[string]float64
+    vocabulary map[string]bool
+}
+
+func NewNaiveBayesClassifier() *NaiveBayesClassifier {
+    return &NaiveBayesClassifier{
+        classProbabilities: make(map[string]float64),
+        featureProbabilities: make(map[string]map[string]float64),
+        vocabulary: make(map[string]bool),
+    }
+}
+
+func (nb *NaiveBayesClassifier) Fit(documents []string, labels []string) {
+    processor := NewTextProcessor()
+    
+    // Подсчет количества документов в каждом классе
+    classCounts := make(map[string]int)
+    for _, label := range labels {
+        classCounts[label]++
+    }
+    
+    // Вычисление априорных вероятностей
+    totalDocs := float64(len(documents))
+    for class, count := range classCounts {
+        nb.classProbabilities[class] = float64(count) / totalDocs
+    }
+    
+    // Подсчет частот слов для каждого класса
+    wordCounts := make(map[string]map[string]int)
+    for class := range nb.classProbabilities {
+        wordCounts[class] = make(map[string]int)
+    }
+    
+    totalWordsPerClass := make(map[string]int)
+    
+    for i, doc := range documents {
+        class := labels[i]
+        cleaned := processor.CleanText(doc)
+        tokens := processor.Tokenize(cleaned)
+        tokens = processor.RemoveStopWords(tokens)
+        tokens = processor.StemTokens(tokens)
+        
+        for _, token := range tokens {
+            wordCounts[class][token]++
+            totalWordsPerClass[class]++
+            nb.vocabulary[token] = true
+        }
+    }
+    
+    // Вычисление условных вероятностей (с лапласовским сглаживанием)
+    vocabularySize := len(nb.vocabulary)
+    
+    for class := range nb.classProbabilities {
+        nb.featureProbabilities[class] = make(map[string]float64)
+        totalWords := totalWordsPerClass[class]
+        
+        for word := range nb.vocabulary {
+            count := wordCounts[class][word]
+            // Лапласовское сглаживание
+            nb.featureProbabilities[class][word] = float64(count + 1) / float64(totalWords + vocabularySize)
+        }
+    }
+}
+
+func (nb *NaiveBayesClassifier) Predict(document string) string {
+    processor := NewTextProcessor()
+    cleaned := processor.CleanText(document)
+    tokens := processor.Tokenize(cleaned)
+    tokens = processor.RemoveStopWords(tokens)
+    tokens = processor.StemTokens(tokens)
+    
+    bestClass := ""
+    bestScore := math.Inf(-1)
+    
+    for class, prior := range nb.classProbabilities {
+        score := math.Log(prior) // Логарифм для избежания underflow
+        for _, token := range tokens {
+            if prob, exists := nb.featureProbabilities[class][token]; exists {
+                score += math.Log(prob)
+            } else {
+                // Если слово не встречалось в обучении, используем маленькую вероятность
+                score += math.Log(1e-10)
+            }
+        }
+        
+        if score > bestScore {
+            bestScore = score
+            bestClass = class
+        }
+    }
+    
+    return bestClass
+}
+
+func main() {
+    fmt.Println("=== Natural Language Processing Demo ===")
+    
+    // Демонстрация текстовой обработки
+    processor := NewTextProcessor()
+    text := "The quick brown fox jumps over the lazy dog. Running quickly, he escaped!"
+    
+    fmt.Println("Original text:", text)
+    cleaned := processor.CleanText(text)
+    fmt.Println("Cleaned text:", cleaned)
+    
+    tokens := processor.Tokenize(cleaned)
+    fmt.Println("Tokens:", tokens)
+    
+    filtered := processor.RemoveStopWords(tokens)
+    fmt.Println("Without stop words:", filtered)
+    
+    stemmed := processor.StemTokens(filtered)
+    fmt.Println("Stemmed:", stemmed)
+    
+    // Демонстрация TF-IDF
+    fmt.Println("\n=== TF-IDF Vectorization ===")
+    documents := []string{
+        "the cat sat on the mat",
+        "the dog sat on the log",
+        "cats and dogs are great pets",
+        "the mat is on the floor",
+    }
+    
+    vectorizer := NewTFIDFVectorizer()
+    vectorizer.Fit(documents)
+    
+    testDoc := "the cat and dog play"
+    vectors := vectorizer.Transform([]string{testDoc})
+    fmt.Printf("TF-IDF vector for '%s': %v\n", testDoc, vectors[0])
+    
+    // Демонстрация классификатора
+    fmt.Println("\n=== Naive Bayes Text Classification ===")
+    
+    trainingDocs := []string{
+        "love this movie its great",
+        "amazing film wonderful acting",
+        "hate this movie terrible acting",
+        "awful film boring story",
+        "great movie fantastic plot",
+        "terrible movie waste of time",
+        "wonderful film amazing cinematography",
+        "boring movie fell asleep",
+    }
+    
+    trainingLabels := []string{
+        "positive", "positive", "negative", "negative",
+        "positive", "negative", "positive", "negative",
+    }
+    
+    classifier := NewNaiveBayesClassifier()
+    classifier.Fit(trainingDocs, trainingLabels)
+    
+    testTexts := []string{
+        "great amazing wonderful film",
+        "terrible awful boring movie",
+        "not bad actually quite good",
+    }
+    
+    for _, testText := range testTexts {
+        prediction := classifier.Predict(testText)
+        fmt.Printf("Text: '%s' -> %s\n", testText, prediction)
+    }
+}
+Задание: Базовые методы NLP: обработка текста, TF-IDF, наивный Байес
+
+152. Компьютерное зрение - базовые фильтры
+go
+package main
+import (
+    "fmt"
+    "image"
+    "image/color"
+    "image/draw"
+    "image/jpeg"
+    "image/png"
+    "math"
+    "os"
+)
+
+type ImageProcessor struct{}
+
+func NewImageProcessor() *ImageProcessor {
+    return &ImageProcessor{}
+}
+
+func (ip *ImageProcessor) LoadImage(filename string) (image.Image, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+    
+    img, _, err := image.Decode(file)
+    if err != nil {
+        return nil, err
+    }
+    
+    return img, nil
+}
+
+func (ip *ImageProcessor) SaveImage(img image.Image, filename string) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    switch {
+    case len(filename) > 4 && filename[len(filename)-4:] == ".png":
+        return png.Encode(file, img)
+    case len(filename) > 4 && filename[len(filename)-4:] == ".jpg":
+        return jpeg.Encode(file, img, &jpeg.Options{Quality: 90})
+    default:
+        return png.Encode(file, img)
+    }
+}
+
+func (ip *ImageProcessor) Grayscale(img image.Image) *image.Gray {
+    bounds := img.Bounds()
+    gray := image.NewGray(bounds)
+    
+    for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+        for x := bounds.Min.X; x < bounds.Max.X; x++ {
+            originalColor := img.At(x, y)
+            grayColor := color.GrayModel.Convert(originalColor)
+            gray.Set(x, y, grayColor)
+        }
+    }
+    
+    return gray
+}
+
+func (ip *ImageProcessor) ApplyConvolution(img image.Image, kernel [][]float64) *image.Gray {
+    bounds := img.Bounds()
+    gray := ip.Grayscale(img)
+    result := image.NewGray(bounds)
+    
+    kernelSize := len(kernel)
+    offset := kernelSize / 2
+    
+    for y := bounds.Min.Y + offset; y < bounds.Max.Y - offset; y++ {
+        for x := bounds.Min.X + offset; x < bounds.Max.X - offset; x++ {
+            var sum float64
+            
+            for ky := -offset; ky <= offset; ky++ {
+                for kx := -offset; kx <= offset; kx++ {
+                    pixel := gray.GrayAt(x + kx, y + ky)
+                    kernelValue := kernel[ky + offset][kx + offset]
+                    sum += float64(pixel.Y) * kernelValue
+                }
+            }
+            
+            // Нормализация
+            sum = math.Max(0, math.Min(255, sum))
+            result.SetGray(x, y, color.Gray{Y: uint8(sum)})
+        }
+    }
+    
+    return result
+}
+
+func (ip *ImageProcessor) GaussianBlur(img image.Image, radius int, sigma float64) *image.Gray {
+    size := 2*radius + 1
+    kernel := make([][]float64, size)
+    
+    // Создание гауссова ядра
+    sum := 0.0
+    for y := -radius; y <= radius; y++ {
+        kernel[y + radius] = make([]float64, size)
+        for x := -radius; x <= radius; x++ {
+            exponent := -(float64(x*x + y*y) / (2 * sigma * sigma))
+            value := math.Exp(exponent)
+            kernel[y + radius][x + radius] = value
+            sum += value
+        }
+    }
+    
+    // Нормализация ядра
+    for y := 0; y < size; y++ {
+        for x := 0; x < size; x++ {
+            kernel[y][x] /= sum
+        }
+    }
+    
+    return ip.ApplyConvolution(img, kernel)
+}
+
+func (ip *ImageProcessor) SobelEdgeDetection(img image.Image) *image.Gray {
+    // Ядра Собеля
+    sobelX := [][]float64{
+        {-1, 0, 1},
+        {-2, 0, 2},
+        {-1, 0, 1},
+    }
+    
+    sobelY := [][]float64{
+        {-1, -2, -1},
+        {0, 0, 0},
+        {1, 2, 1},
+    }
+    
+    bounds := img.Bounds()
+    gray := ip.Grayscale(img)
+    result := image.NewGray(bounds)
+    
+    for y := 1; y < bounds.Max.Y - 1; y++ {
+        for x := 1; x < bounds.Max.X - 1; x++ {
+            var gx, gy float64
+            
+            // Применение ядер
+            for ky := -1; ky <= 1; ky++ {
+                for kx := -1; kx <= 1; kx++ {
+                    pixel := gray.GrayAt(x + kx, y + ky)
+                    value := float64(pixel.Y)
+                    
+                    gx += value * sobelX[ky + 1][kx + 1]
+                    gy += value * sobelY[ky + 1][kx + 1]
+                }
+            }
+            
+            // Вычисление градиента
+            gradient := math.Sqrt(gx*gx + gy*gy)
+            gradient = math.Min(255, gradient)
+            
+            result.SetGray(x, y, color.Gray{Y: uint8(gradient)})
+        }
+    }
+    
+    return result
+}
+
+func (ip *ImageProcessor) CannyEdgeDetection(img image.Image, lowThreshold, highThreshold float64) *image.Gray {
+    // 1. Размытие по Гауссу
+    blurred := ip.GaussianBlur(img, 2, 1.4)
+    
+    // 2. Градиенты Собеля
+    bounds := blurred.Bounds()
+    gradient := image.NewGray(bounds)
+    direction := make([][]float64, bounds.Dy())
+    for i := range direction {
+        direction[i] = make([]float64, bounds.Dx())
+    }
+    
+    sobelX := [][]float64{{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}}
+    sobelY := [][]float64{{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}}
+    
+    for y := 1; y < bounds.Max.Y - 1; y++ {
+        for x := 1; x < bounds.Max.X - 1; x++ {
+            var gx, gy float64
+            
+            for ky := -1; ky <= 1; ky++ {
+                for kx := -1; kx <= 1; kx++ {
+                    pixel := blurred.GrayAt(x + kx, y + ky)
+                    value := float64(pixel.Y)
+                    
+                    gx += value * sobelX[ky + 1][kx + 1]
+                    gy += value * sobelY[ky + 1][kx + 1]
+                }
+            }
+            
+            grad := math.Sqrt(gx*gx + gy*gy)
+            gradient.SetGray(x, y, color.Gray{Y: uint8(math.Min(255, grad))})
+            
+            // Направление градиента
+            angle := math.Atan2(gy, gx) * 180 / math.Pi
+            if angle < 0 {
+                angle += 180
+            }
+            direction[y][x] = angle
+        }
+    }
+    
+    // 3. Подавление немаксимумов
+    suppressed := image.NewGray(bounds)
+    
+    for y := 2; y < bounds.Max.Y - 2; y++ {
+        for x := 2; x < bounds.Max.X - 2; x++ {
+            angle := direction[y][x]
+            var p1, p2 float64
+            
+            // Определение соседей в направлении градиента
+            if (0 <= angle && angle < 22.5) || (157.5 <= angle && angle <= 180) {
+                // Горизонтальное направление
+                p1 = float64(gradient.GrayAt(x + 1, y).Y)
+                p2 = float64(gradient.GrayAt(x - 1, y).Y)
+            } else if 22.5 <= angle && angle < 67.5 {
+                // Диагональ 45°
+                p1 = float64(gradient.GrayAt(x + 1, y - 1).Y)
+                p2 = float64(gradient.GrayAt(x - 1, y + 1).Y)
+            } else if 67.5 <= angle && angle < 112.5 {
+                // Вертикальное направление
+                p1 = float64(gradient.GrayAt(x, y - 1).Y)
+                p2 = float64(gradient.GrayAt(x, y + 1).Y)
+            } else if 112.5 <= angle && angle < 157.5 {
+                // Диагональ 135°
+                p1 = float64(gradient.GrayAt(x - 1, y - 1).Y)
+                p2 = float64(gradient.GrayAt(x + 1, y + 1).Y)
+            }
+            
+            current := float64(gradient.GrayAt(x, y).Y)
+            if current >= p1 && current >= p2 {
+                suppressed.SetGray(x, y, color.Gray{Y: uint8(current)})
+            } else {
+                suppressed.SetGray(x, y, color.Gray{Y: 0})
+            }
+        }
+    }
+    
+    // 4. Двойная пороговая фильтрация
+    result := image.NewGray(bounds)
+    
+    for y := 0; y < bounds.Max.Y; y++ {
+        for x := 0; x < bounds.Max.X; x++ {
+            value := float64(suppressed.GrayAt(x, y).Y)
+            
+            if value >= highThreshold {
+                result.SetGray(x, y, color.Gray{Y: 255}) // Сильный край
+            } else if value >= lowThreshold {
+                result.SetGray(x, y, color.Gray{Y: 128}) // Слабый край
+            } else {
+                result.SetGray(x, y, color.Gray{Y: 0}) // Не край
+            }
+        }
+    }
+    
+    return result
+}
+
+func (ip *ImageProcessor) HistogramEqualization(img image.Image) *image.Gray {
+    bounds := img.Bounds()
+    gray := ip.Grayscale(img)
+    
+    // Вычисление гистограммы
+    histogram := [256]int{}
+    for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+        for x := bounds.Min.X; x < bounds.Max.X; x++ {
+            pixel := gray.GrayAt(x, y)
+            histogram[pixel.Y]++
+        }
+    }
+    
+    // Вычисление кумулятивной гистограммы
+    cumulative := [256]int{}
+    cumulative[0] = histogram[0]
+    for i := 1; i < 256; i++ {
+        cumulative[i] = cumulative[i-1] + histogram[i]
+    }
+    
+    // Нормализация
+    totalPixels := bounds.Dx() * bounds.Dy()
+    result := image.NewGray(bounds)
+    
+    for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+        for x := bounds.Min.X; x < bounds.Max.X; x++ {
+            pixel := gray.GrayAt(x, y)
+            newValue := cumulative[pixel.Y] * 255 / totalPixels
+            result.SetGray(x, y, color.Gray{Y: uint8(newValue)})
+        }
+    }
+    
+    return result
+}
+
+func main() {
+    processor := NewImageProcessor()
+    
+    // Создание тестового изображения
+    img := image.NewRGBA(image.Rect(0, 0, 400, 400))
+    
+    // Рисование тестовых фигур
+    draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
+    
+    // Круг
+    for y := 100; y < 300; y++ {
+        for x := 100; x < 300; x++ {
+            dx, dy := x-200, y-200
+            if dx*dx+dy*dy <= 100*100 {
+                img.Set(x, y, color.Black)
+            }
+        }
+    }
+    
+    // Прямоугольник
+    for y := 50; y < 150; y++ {
+        for x := 50; x < 150; x++ {
+            img.Set(x, y, color.Gray{Y: 100})
+        }
+    }
+    
+    // Сохранение оригинального изображения
+    processor.SaveImage(img, "original.png")
+    fmt.Println("Created test image: original.png")
+    
+    // Применение фильтров
+    fmt.Println("Applying image filters...")
+    
+    // Grayscale
+    gray := processor.Grayscale(img)
+    processor.SaveImage(gray, "grayscale.png")
+    fmt.Println("Grayscale saved: grayscale.png")
+    
+    // Gaussian blur
+    blurred := processor.GaussianBlur(img, 3, 2.0)
+    processor.SaveImage(blurred, "blurred.png")
+    fmt.Println("Gaussian blur saved: blurred.png")
+    
+    // Sobel edge detection
+    sobel := processor.SobelEdgeDetection(img)
+    processor.SaveImage(sobel, "sobel_edges.png")
+    fmt.Println("Sobel edges saved: sobel_edges.png")
+    
+    // Canny edge detection
+    canny := processor.CannyEdgeDetection(img, 50, 150)
+    processor.SaveImage(canny, "canny_edges.png")
+    fmt.Println("Canny edges saved: canny_edges.png")
+    
+    // Histogram equalization
+    equalized := processor.HistogramEqualization(img)
+    processor.SaveImage(equalized, "equalized.png")
+    fmt.Println("Histogram equalization saved: equalized.png")
+    
+    fmt.Println("\nAll image processing operations completed!")
+}
+Задание: Базовые операции компьютерного зрения: фильтры, детекция краев
+
+Это 152 примера из 200. Хотите, чтобы я продолжил с оставшимися 48 примерами? Они будут охватывать: глубокое обучение, reinforcement learning, обработку аудио, криптовалюты и другие продвинутые темы.
+
+да
+Продолжаю с оставшимися 48 примерами, охватывающими глубокое обучение и другие продвинутые темы:
+
+Глубокое обучение и нейронные сети
+153. Полносвязная нейронная сеть
+go
+package main
+import (
+    "fmt"
+    "math"
+    "math/rand"
+)
+
+type Layer struct {
+    Weights [][]float64
+    Biases  []float64
+    Outputs []float64
+    Deltas  []float64
+}
+
+type NeuralNetwork struct {
+    Layers []*Layer
+    LR     float64 // learning rate
+}
+
+func NewNeuralNetwork(layers []int, learningRate float64) *NeuralNetwork {
+    nn := &NeuralNetwork{LR: learningRate}
+    
+    for i := 1; i < len(layers); i++ {
+        layer := &Layer{
+            Weights: make([][]float64, layers[i]),
+            Biases:  make([]float64, layers[i]),
+            Outputs: make([]float64, layers[i]),
+            Deltas:  make([]float64, layers[i]),
+        }
+        
+        // Инициализация весов (Xavier initialization)
+        for j := range layer.Weights {
+            layer.Weights[j] = make([]float64, layers[i-1])
+            for k := range layer.Weights[j] {
+                layer.Weights[j][k] = rand.NormFloat64() * math.Sqrt(2.0/float64(layers[i-1]))
+            }
+            layer.Biases[j] = 0.1
+        }
+        
+        nn.Layers = append(nn.Layers, layer)
+    }
+    
+    return nn
+}
+
+func sigmoid(x float64) float64 {
+    return 1.0 / (1.0 + math.Exp(-x))
+}
+
+func sigmoidDerivative(x float64) float64 {
+    return x * (1.0 - x)
+}
+
+func relu(x float64) float64 {
+    if x > 0 {
+        return x
+    }
+    return 0
+}
+
+func reluDerivative(x float64) float64 {
+    if x > 0 {
+        return 1
+    }
+    return 0
+}
+
+func (nn *NeuralNetwork) Forward(input []float64) []float64 {
+    current := input
+    
+    for _, layer := range nn.Layers {
+        next := make([]float64, len(layer.Weights))
+        
+        for i, neuron := range layer.Weights {
+            sum := layer.Biases[i]
+            for j, weight := range neuron {
+                sum += weight * current[j]
+            }
+            // ReLU для скрытых слоев, sigmoid для выходного
+            if layer != nn.Layers[len(nn.Layers)-1] {
+                next[i] = relu(sum)
+            } else {
+                next[i] = sigmoid(sum)
+            }
+            layer.Outputs[i] = next[i]
+        }
+        
+        current = next
+    }
+    
+    return current
+}
+
+func (nn *NeuralNetwork) Backward(input, target []float64) {
+    // Output layer deltas
+    outputLayer := nn.Layers[len(nn.Layers)-1]
+    for i := range outputLayer.Deltas {
+        error := target[i] - outputLayer.Outputs[i]
+        outputLayer.Deltas[i] = error * sigmoidDerivative(outputLayer.Outputs[i])
+    }
+    
+    // Hidden layers deltas
+    for l := len(nn.Layers) - 2; l >= 0; l-- {
+        currentLayer := nn.Layers[l]
+        nextLayer := nn.Layers[l+1]
+        
+        for i := range currentLayer.Deltas {
+            var sum float64
+            for j := range nextLayer.Deltas {
+                sum += nextLayer.Weights[j][i] * nextLayer.Deltas[j]
+            }
+            currentLayer.Deltas[i] = sum * reluDerivative(currentLayer.Outputs[i])
+        }
+    }
+    
+    // Update weights and biases
+    prevOutput := input
+    for _, layer := range nn.Layers {
+        for i := range layer.Weights {
+            for j := range layer.Weights[i] {
+                layer.Weights[i][j] += nn.LR * layer.Deltas[i] * prevOutput[j]
+            }
+            layer.Biases[i] += nn.LR * layer.Deltas[i]
+        }
+        prevOutput = layer.Outputs
+    }
+}
+
+func (nn *NeuralNetwork) Train(inputs [][]float64, targets [][]float64, epochs int) {
+    for epoch := 0; epoch < epochs; epoch++ {
+        totalLoss := 0.0
+        
+        for i, input := range inputs {
+            output := nn.Forward(input)
+            nn.Backward(input, targets[i])
+            
+            // Calculate loss
+            for j := range output {
+                diff := targets[i][j] - output[j]
+                totalLoss += diff * diff
+            }
+        }
+        
+        if epoch%100 == 0 {
+            avgLoss := totalLoss / float64(len(inputs))
+            fmt.Printf("Epoch %d, Loss: %.4f\n", epoch, avgLoss)
+        }
+    }
+}
+
+func (nn *NeuralNetwork) Predict(input []float64) []float64 {
+    return nn.Forward(input)
+}
+
+func main() {
+    rand.Seed(42)
+    
+    // Создание нейронной сети для XOR
+    layers := []int{2, 4, 1} // 2 входа, 4 нейрона в скрытом слое, 1 выход
+    nn := NewNeuralNetwork(layers, 0.1)
+    
+    // Данные XOR
+    inputs := [][]float64{
+        {0, 0},
+        {0, 1},
+        {1, 0},
+        {1, 1},
+    }
+    targets := [][]float64{
+        {0},
+        {1},
+        {1},
+        {0},
+    }
+    
+    fmt.Println("Training Neural Network for XOR problem...")
+    nn.Train(inputs, targets, 10000)
+    
+    fmt.Println("\nTesting trained network:")
+    for i, input := range inputs {
+        prediction := nn.Predict(input)
+        fmt.Printf("Input: %v, Target: %.0f, Prediction: %.4f\n", 
+            input, targets[i][0], prediction[0])
+    }
+    
+    // Тестирование на новых данных
+    testInputs := [][]float64{
+        {0.5, 0.5},
+        {0.2, 0.8},
+        {0.8, 0.2},
+    }
+    
+    fmt.Println("\nTesting on new data:")
+    for _, input := range testInputs {
+        prediction := nn.Predict(input)
+        fmt.Printf("Input: %v, Prediction: %.4f\n", input, prediction[0])
+    }
+}
+Задание: Полносвязная нейронная сеть с обратным распространением ошибки
+
+154. Сверточная нейронная сеть (CNN)
+go
+package main
+import (
+    "fmt"
+    "math"
+    "math/rand"
+)
+
+type ConvLayer struct {
+    Filters [][][][]float64 // [filter][channel][row][col]
+    Biases  []float64
+    Stride  int
+    Padding int
+}
+
+type PoolingLayer struct {
+    Size    int
+    Stride  int
+}
+
+type FlattenLayer struct {
+    InputSize  []int
+    OutputSize int
+}
+
+type CNN struct {
+    Conv     *ConvLayer
+    Pool     *PoolingLayer
+    Flatten  *FlattenLayer
+    Dense    *NeuralNetwork
+}
+
+func NewConvLayer(numFilters, filterSize, numChannels, stride, padding int) *ConvLayer {
+    filters := make([][][][]float64, numFilters)
+    biases := make([]float64, numFilters)
+    
+    for f := 0; f < numFilters; f++ {
+        filters[f] = make([][][]float64, numChannels)
+        for c := 0; c < numChannels; c++ {
+            filters[f][c] = make([][]float64, filterSize)
+            for i := 0; i < filterSize; i++ {
+                filters[f][c][i] = make([]float64, filterSize)
+                for j := 0; j < filterSize; j++ {
+                    filters[f][c][i][j] = rand.NormFloat64() * 0.1
+                }
+            }
+        }
+        biases[f] = 0.1
+    }
+    
+    return &ConvLayer{
+        Filters: filters,
+        Biases:  biases,
+        Stride:  stride,
+        Padding: padding,
+    }
+}
+
+func (cl *ConvLayer) Forward(input [][][]float64) [][][]float64 {
+    channels := len(input)
+    inputHeight := len(input[0])
+    inputWidth := len(input[0][0])
+    
+    outputHeight := (inputHeight + 2*cl.Padding - len(cl.Filters[0][0]))/cl.Stride + 1
+    outputWidth := (inputWidth + 2*cl.Padding - len(cl.Filters[0][0][0]))/cl.Stride + 1
+    
+    output := make([][][]float64, len(cl.Filters))
+    for f := range output {
+        output[f] = make([][]float64, outputHeight)
+        for i := range output[f] {
+            output[f][i] = make([]float64, outputWidth)
+        }
+    }
+    
+    for f := range cl.Filters {
+        for i := 0; i < outputHeight; i++ {
+            for j := 0; j < outputWidth; j++ {
+                sum := cl.Biases[f]
+                
+                for c := range cl.Filters[f] {
+                    for di := 0; di < len(cl.Filters[f][c]); di++ {
+                        for dj := 0; dj < len(cl.Filters[f][c][di]); dj++ {
+                            inputI := i*cl.Stride + di - cl.Padding
+                            inputJ := j*cl.Stride + dj - cl.Padding
+                            
+                            if inputI >= 0 && inputI < inputHeight && inputJ >= 0 && inputJ < inputWidth {
+                                sum += input[c][inputI][inputJ] * cl.Filters[f][c][di][dj]
+                            }
+                        }
+                    }
+                }
+                
+                output[f][i][j] = relu(sum)
+            }
+        }
+    }
+    
+    return output
+}
+
+func NewPoolingLayer(size, stride int) *PoolingLayer {
+    return &PoolingLayer{
+        Size:   size,
+        Stride: stride,
+    }
+}
+
+func (pl *PoolingLayer) Forward(input [][][]float64) [][][]float64 {
+    channels := len(input)
+    inputHeight := len(input[0])
+    inputWidth := len(input[0][0])
+    
+    outputHeight := (inputHeight - pl.Size)/pl.Stride + 1
+    outputWidth := (inputWidth - pl.Size)/pl.Stride + 1
+    
+    output := make([][][]float64, channels)
+    for c := range output {
+        output[c] = make([][]float64, outputHeight)
+        for i := range output[c] {
+            output[c][i] = make([]float64, outputWidth)
+        }
+    }
+    
+    for c := range input {
+        for i := 0; i < outputHeight; i++ {
+            for j := 0; j < outputWidth; j++ {
+                maxVal := math.Inf(-1)
+                
+                for di := 0; di < pl.Size; di++ {
+                    for dj := 0; dj < pl.Size; dj++ {
+                        inputI := i*pl.Stride + di
+                        inputJ := j*pl.Stride + dj
+                        if inputI < inputHeight && inputJ < inputWidth {
+                            if input[c][inputI][inputJ] > maxVal {
+                                maxVal = input[c][inputI][inputJ]
+                            }
+                        }
+                    }
+                }
+                
+                output[c][i][j] = maxVal
+            }
+        }
+    }
+    
+    return output
+}
+
+func NewFlattenLayer() *FlattenLayer {
+    return &FlattenLayer{}
+}
+
+func (fl *FlattenLayer) Forward(input [][][]float64) []float64 {
+    channels := len(input)
+    height := len(input[0])
+    width := len(input[0][0])
+    
+    fl.InputSize = []int{channels, height, width}
+    fl.OutputSize = channels * height * width
+    
+    output := make([]float64, fl.OutputSize)
+    idx := 0
+    
+    for c := range input {
+        for i := range input[c] {
+            for j := range input[c][i] {
+                output[idx] = input[c][i][j]
+                idx++
+            }
+        }
+    }
+    
+    return output
+}
+
+func NewCNN() *CNN {
+    conv := NewConvLayer(8, 3, 1, 1, 1) // 8 фильтров 3x3
+    pool := NewPoolingLayer(2, 2)       // Max pooling 2x2
+    flatten := NewFlattenLayer()
+    dense := NewNeuralNetwork([]int{32, 16, 10}, 0.01) // Полносвязные слои
+    
+    return &CNN{
+        Conv:    conv,
+        Pool:    pool,
+        Flatten: flatten,
+        Dense:   dense,
+    }
+}
+
+func (cnn *CNN) Forward(input [][][]float64) []float64 {
+    // Сверточный слой
+    convOut := cnn.Conv.Forward(input)
+    
+    // Pooling слой
+    poolOut := cnn.Pool.Forward(convOut)
+    
+    // Выравнивание
+    flattenOut := cnn.Flatten.Forward(poolOut)
+    
+    // Полносвязные слои
+    finalOut := cnn.Dense.Forward(flattenOut)
+    
+    return finalOut
+}
+
+func (cnn *CNN) Train(inputs [][][][]float64, targets [][]float64, epochs int) {
+    for epoch := 0; epoch < epochs; epoch++ {
+        totalLoss := 0.0
+        
+        for i, input := range inputs {
+            output := cnn.Forward(input)
+            
+            // Упрощенное обучение (без обратного распространения для сверточных слоев)
+            // В реальной реализации нужно реализовать полное обратное распространение
+            
+            // Расчет потерь
+            for j := range output {
+                diff := targets[i][j] - output[j]
+                totalLoss += diff * diff
+            }
+        }
+        
+        if epoch%10 == 0 {
+            avgLoss := totalLoss / float64(len(inputs))
+            fmt.Printf("Epoch %d, Loss: %.4f\n", epoch, avgLoss)
+        }
+    }
+}
+
+func main() {
+    rand.Seed(42)
+    
+    // Создание простой CNN
+    cnn := NewCNN()
+    
+    // Создание синтетических данных (упрощенные изображения 28x28)
+    fmt.Println("Generating synthetic image data...")
+    
+    numSamples := 100
+    inputs := make([][][][]float64, numSamples)
+    targets := make([][]float64, numSamples)
+    
+    for i := 0; i < numSamples; i++ {
+        // Создание "изображения" 28x28 с одним каналом
+        image := make([][]float64, 28)
+        for row := range image {
+            image[row] = make([]float64, 28)
+            for col := range image[row] {
+                // Случайные пиксели с некоторой структурой
+                if row < 14 && col < 14 {
+                    image[row][col] = rand.Float64()
+                } else {
+                    image[row][col] = rand.Float64() * 0.3
+                }
+            }
+        }
+        
+        inputs[i] = [][][]float64{image} // Один канал (grayscale)
+        
+        // Случайная метка класса (10 классов)
+        target := make([]float64, 10)
+        class := rand.Intn(10)
+        target[class] = 1.0
+        targets[i] = target
+    }
+    
+    fmt.Println("Training CNN...")
+    cnn.Train(inputs, targets, 100)
+    
+    // Тестирование
+    fmt.Println("\nTesting CNN:")
+    testImage := inputs[0]
+    prediction := cnn.Forward(testImage)
+    
+    fmt.Printf("Prediction: %v\n", prediction)
+    
+    // Нахождение предсказанного класса
+    maxProb := 0.0
+    predictedClass := -1
+    for i, prob := range prediction {
+        if prob > maxProb {
+            maxProb = prob
+            predictedClass = i
+        }
+    }
+    
+    fmt.Printf("Predicted class: %d (confidence: %.2f%%)\n", 
+        predictedClass, maxProb*100)
+}
+Задание: Сверточная нейронная сеть для классификации изображений
+
+155. Рекуррентная нейронная сеть (RNN)
+go
+package main
+import (
+    "fmt"
+    "math"
+    "math/rand"
+)
+
+type RNNLayer struct {
+    Wxh [][]float64 // Веса вход->скрытый
+    Whh [][]float64 // Веса скрытый->скрытый
+    Why [][]float64 // Веса скрытый->выход
+    Bh  []float64   // Смещения скрытого слоя
+    By  []float64   // Смещения выходного слоя
+    H   []float64   // Состояние скрытого слоя
+}
+
+type RNN struct {
+    Layer    *RNNLayer
+    LR       float64
+    HSize    int // Размер скрытого состояния
+    InSize   int // Размер входа
+    OutSize  int // Размер выхода
+}
+
+func NewRNN(inputSize, hiddenSize, outputSize int, learningRate float64) *RNN {
+    rnn := &RNN{
+        HSize:   hiddenSize,
+        InSize:  inputSize,
+        OutSize: outputSize,
+        LR:      learningRate,
+    }
+    
+    // Инициализация весов
+    layer := &RNNLayer{
+        Wxh: make([][]float64, hiddenSize),
+        Whh: make([][]float64, hiddenSize),
+        Why: make([][]float64, outputSize),
+        Bh:  make([]float64, hiddenSize),
+        By:  make([]float64, outputSize),
+        H:   make([]float64, hiddenSize),
+    }
+    
+    // Инициализация Wxh (вход->скрытый)
+    for i := range layer.Wxh {
+        layer.Wxh[i] = make([]float64, inputSize)
+        for j := range layer.Wxh[i] {
+            layer.Wxh[i][j] = rand.NormFloat64() * 0.01
+        }
+    }
+    
+    // Инициализация Whh (скрытый->скрытый)
+    for i := range layer.Whh {
+        layer.Whh[i] = make([]float64, hiddenSize)
+        for j := range layer.Whh[i] {
+            layer.Whh[i][j] = rand.NormFloat64() * 0.01
+        }
+    }
+    
+    // Инициализация Why (скрытый->выход)
+    for i := range layer.Why {
+        layer.Why[i] = make([]float64, hiddenSize)
+        for j := range layer.Why[i] {
+            layer.Why[i][j] = rand.NormFloat64() * 0.01
+        }
+    }
+    
+    rnn.Layer = layer
+    return rnn
+}
+
+func (rnn *RNN) Forward(inputs [][]float64) ([][]float64, [][]float64) {
+    seqLength := len(inputs)
+    hiddenStates := make([][]float64, seqLength+1)
+    outputs := make([][]float64, seqLength)
+    
+    // Инициализация начального скрытого состояния
+    hiddenStates[0] = make([]float64, rnn.HSize)
+    copy(hiddenStates[0], rnn.Layer.H)
+    
+    for t := 0; t < seqLength; t++ {
+        // Новое скрытое состояние
+        hiddenStates[t+1] = make([]float64, rnn.HSize)
+        
+        for i := 0; i < rnn.HSize; i++ {
+            sum := rnn.Layer.Bh[i]
+            
+            // Вход->скрытый
+            for j := 0; j < rnn.InSize; j++ {
+                sum += inputs[t][j] * rnn.Layer.Wxh[i][j]
+            }
+            
+            // Скрытый->скрытый
+            for j := 0; j < rnn.HSize; j++ {
+                sum += hiddenStates[t][j] * rnn.Layer.Whh[i][j]
+            }
+            
+            hiddenStates[t+1][i] = math.Tanh(sum)
+        }
+        
+        // Выходной слой
+        outputs[t] = make([]float64, rnn.OutSize)
+        for i := 0; i < rnn.OutSize; i++ {
+            sum := rnn.Layer.By[i]
+            for j := 0; j < rnn.HSize; j++ {
+                sum += hiddenStates[t+1][j] * rnn.Layer.Why[i][j]
+            }
+            outputs[t][i] = sum // Linear activation for output
+        }
+    }
+    
+    // Сохранение последнего скрытого состояния
+    copy(rnn.Layer.H, hiddenStates[seqLength])
+    
+    return outputs, hiddenStates
+}
+
+func (rnn *RNN) Backward(inputs [][]float64, targets [][]float64, outputs [][]float64, hiddenStates [][]float64) {
+    seqLength := len(inputs)
+    
+    // Градиенты
+    dWxh := make([][]float64, rnn.HSize)
+    dWhh := make([][]float64, rnn.HSize)
+    dWhy := make([][]float64, rnn.OutSize)
+    dBh := make([]float64, rnn.HSize)
+    dBy := make([]float64, rnn.OutSize)
+    
+    for i := range dWxh {
+        dWxh[i] = make([]float64, rnn.InSize)
+    }
+    for i := range dWhh {
+        dWhh[i] = make([]float64, rnn.HSize)
+    }
+    for i := range dWhy {
+        dWhy[i] = make([]float64, rnn.HSize)
+    }
+    
+    // Обратное распространение через время (BPTT)
+    dhNext := make([]float64, rnn.HSize)
+    
+    for t := seqLength - 1; t >= 0; t-- {
+        // Градиенты выходного слоя
+        dy := make([]float64, rnn.OutSize)
+        for i := 0; i < rnn.OutSize; i++ {
+            dy[i] = outputs[t][i] - targets[t][i]
+            
+            // Градиенты Why и By
+            for j := 0; j < rnn.HSize; j++ {
+                dWhy[i][j] += dy[i] * hiddenStates[t+1][j]
+            }
+            dBy[i] += dy[i]
+        }
+        
+        // Градиенты скрытого состояния
+        dh := make([]float64, rnn.HSize)
+        for i := 0; i < rnn.HSize; i++ {
+            // От выхода
+            for j := 0; j < rnn.OutSize; j++ {
+                dh[i] += dy[j] * rnn.Layer.Why[j][i]
+            }
+            
+            // От следующего скрытого состояния
+            for j := 0; j < rnn.HSize; j++ {
+                dh[i] += dhNext[j] * rnn.Layer.Whh[j][i]
+            }
+            
+            // Градиент tanh
+            dh[i] *= (1 - hiddenStates[t+1][i]*hiddenStates[t+1][i])
+        }
+        
+        // Градиенты весов
+        for i := 0; i < rnn.HSize; i++ {
+            for j := 0; j < rnn.InSize; j++ {
+                dWxh[i][j] += dh[i] * inputs[t][j]
+            }
+            for j := 0; j < rnn.HSize; j++ {
+                dWhh[i][j] += dh[i] * hiddenStates[t][j]
+            }
+            dBh[i] += dh[i]
+        }
+        
+        dhNext = dh
+    }
+    
+    // Обновление весов
+    for i := 0; i < rnn.HSize; i++ {
+        for j := 0; j < rnn.InSize; j++ {
+            rnn.Layer.Wxh[i][j] -= rnn.LR * dWxh[i][j]
+        }
+        for j := 0; j < rnn.HSize; j++ {
+            rnn.Layer.Whh[i][j] -= rnn.LR * dWhh[i][j]
+        }
+        rnn.Layer.Bh[i] -= rnn.LR * dBh[i]
+    }
+    
+    for i := 0; i < rnn.OutSize; i++ {
+        for j := 0; j < rnn.HSize; j++ {
+            rnn.Layer.Why[i][j] -= rnn.LR * dWhy[i][j]
+        }
+        rnn.Layer.By[i] -= rnn.LR * dBy[i]
+    }
+}
+
+func (rnn *RNN) Train(inputs [][]float64, targets [][]float64, epochs int) {
+    for epoch := 0; epoch < epochs; epoch++ {
+        totalLoss := 0.0
+        
+        outputs, hiddenStates := rnn.Forward(inputs)
+        rnn.Backward(inputs, targets, outputs, hiddenStates)
+        
+        // Расчет потерь
+        for t := range outputs {
+            for i := range outputs[t] {
+                diff := outputs[t][i] - targets[t][i]
+                totalLoss += diff * diff
+            }
+        }
+        
+        if epoch%100 == 0 {
+            avgLoss := totalLoss / float64(len(outputs))
+            fmt.Printf("Epoch %d, Loss: %.4f\n", epoch, avgLoss)
+        }
+    }
+}
+
+func (rnn *RNN) Predict(seed []float64, length int) [][]float64 {
+    predictions := make([][]float64, length)
+    currentInput := seed
+    currentHidden := make([]float64, rnn.HSize)
+    copy(currentHidden, rnn.Layer.H)
+    
+    for i := 0; i < length; i++ {
+        // Прямой проход
+        nextHidden := make([]float64, rnn.HSize)
+        for j := 0; j < rnn.HSize; j++ {
+            sum := rnn.Layer.Bh[j]
+            for k := 0; k < rnn.InSize; k++ {
+                sum += currentInput[k] * rnn.Layer.Wxh[j][k]
+            }
+            for k := 0; k < rnn.HSize; k++ {
+                sum += currentHidden[k] * rnn.Layer.Whh[j][k]
+            }
+            nextHidden[j] = math.Tanh(sum)
+        }
+        
+        // Выход
+        output := make([]float64, rnn.OutSize)
+        for j := 0; j < rnn.OutSize; j++ {
+            sum := rnn.Layer.By[j]
+            for k := 0; k < rnn.HSize; k++ {
+                sum += nextHidden[k] * rnn.Layer.Why[j][k]
+            }
+            output[j] = sum
+        }
+        
+        predictions[i] = output
+        
+        // Использование предсказания как следующего входа
+        currentInput = output
+        currentHidden = nextHidden
+    }
+    
+    return predictions
+}
+
+func main() {
+    rand.Seed(42)
+    
+    // Создание RNN для предсказания последовательностей
+    rnn := NewRNN(1, 32, 1, 0.01)
+    
+    // Генерация синтетических данных (синусоида)
+    fmt.Println("Generating sine wave data...")
+    
+    seqLength := 50
+    inputs := make([][]float64, seqLength)
+    targets := make([][]float64, seqLength)
+    
+    for i := 0; i < seqLength; i++ {
+        x := float64(i) * 0.1
+        inputs[i] = []float64{math.Sin(x)}
+        targets[i] = []float64{math.Sin(x + 0.1)} // Предсказание следующего значения
+    }
+    
+    fmt.Println("Training RNN...")
+    rnn.Train(inputs, targets, 1000)
+    
+    // Тестирование предсказания
+    fmt.Println("\nTesting sequence prediction:")
+    seed := []float64{math.Sin(0)}
+    predictions := rnn.Predict(seed, 20)
+    
+    fmt.Println("Time\tPredicted\tActual")
+    for i := 0; i < len(predictions); i++ {
+        actual := math.Sin(float64(i+1) * 0.1)
+        fmt.Printf("%d\t%.4f\t\t%.4f\n", i+1, predictions[i][0], actual)
+    }
+    
+    // Сброс состояния для нового предсказания
+    rnn.Layer.H = make([]float64, rnn.HSize)
+    
+    // Предсказание более длинной последовательности
+    fmt.Println("\nLong-term prediction:")
+    longPredictions := rnn.Predict(seed, 50)
+    
+    fmt.Println("Time\tPredicted\tActual")
+    for i := 0; i < len(longPredictions); i++ {
+        actual := math.Sin(float64(i+1) * 0.1)
+        fmt.Printf("%d\t%.4f\t\t%.4f\n", i+1, longPredictions[i][0], actual)
+    }
+}
+Задание: Рекуррентная нейронная сеть для предсказания временных рядов
+
+156. Генеративно-состязательная сеть (GAN)
+go
+package main
+import (
+    "fmt"
+    "math"
+    "math/rand"
+)
+
+type Generator struct {
+    Layers []*Layer
+    LR     float64
+}
+
+type Discriminator struct {
+    Layers []*Layer
+    LR     float64
+}
+
+type GAN struct {
+    Generator     *Generator
+    Discriminator *Discriminator
+    NoiseSize     int
+    DataSize      int
+}
+
+func NewGenerator(noiseSize, hiddenSize, outputSize int, learningRate float64) *Generator {
+    layers := []int{noiseSize, hiddenSize, hiddenSize, outputSize}
+    nn := NewNeuralNetwork(layers, learningRate)
+    
+    return &Generator{
+        Layers: nn.Layers,
+        LR:     learningRate,
+    }
+}
+
+func NewDiscriminator(inputSize, hiddenSize int, learningRate float64) *Discriminator {
+    layers := []int{inputSize, hiddenSize, hiddenSize, 1}
+    nn := NewNeuralNetwork(layers, learningRate)
+    
+    return &Discriminator{
+        Layers: nn.Layers,
+        LR:     learningRate,
+    }
+}
+
+func NewGAN(noiseSize, dataSize, hiddenSize int, learningRate float64) *GAN {
+    generator := NewGenerator(noiseSize, hiddenSize, dataSize, learningRate)
+    discriminator := NewDiscriminator(dataSize, hiddenSize, learningRate)
+    
+    return &GAN{
+        Generator:     generator,
+        Discriminator: discriminator,
+        NoiseSize:     noiseSize,
+        DataSize:      dataSize,
+    }
+}
+
+func (g *Generator) Forward(noise []float64) []float64 {
+    current := noise
+    
+    for _, layer := range g.Layers {
+        next := make([]float64, len(layer.Weights))
+        
+        for i, neuron := range layer.Weights {
+            sum := layer.Biases[i]
+            for j, weight := range neuron {
+                sum += weight * current[j]
+            }
+            
+            // Tanh для генератора (выход в диапазоне [-1, 1])
+            if layer == g.Layers[len(g.Layers)-1] {
+                next[i] = math.Tanh(sum)
+            } else {
+                next[i] = relu(sum)
+            }
+            layer.Outputs[i] = next[i]
+        }
+        
+        current = next
+    }
+    
+    return current
+}
+
+func (d *Discriminator) Forward(data []float64) float64 {
+    current := data
+    
+    for _, layer := range d.Layers {
+        next := make([]float64, len(layer.Weights))
+        
+        for i, neuron := range layer.Weights {
+            sum := layer.Biases[i]
+            for j, weight := range neuron {
+                sum += weight * current[j]
+            }
+            
+            // Sigmoid для дискриминатора (вероятность)
+            if layer == d.Layers[len(d.Layers)-1] {
+                next[i] = sigmoid(sum)
+            } else {
+                next[i] = relu(sum)
+            }
+            layer.Outputs[i] = next[i]
+        }
+        
+        current = next
+    }
+    
+    return current[0] // Один выход - вероятность реальности
+}
+
+func (gan *GAN) Train(realData [][]float64, epochs, batchSize int) {
+    for epoch := 0; epoch < epochs; epoch++ {
+        // Обучение дискриминатора
+        dLoss := gan.trainDiscriminator(realData, batchSize)
+        
+        // Обучение генератора
+        gLoss := gan.trainGenerator(batchSize)
+        
+        if epoch%100 == 0 {
+            fmt.Printf("Epoch %d, D Loss: %.4f, G Loss: %.4f\n", epoch, dLoss, gLoss)
+        }
+    }
+}
+
+func (gan *GAN) trainDiscriminator(realData [][]float64, batchSize int) float64 {
+    totalLoss := 0.0
+    batches := 0
+    
+    for i := 0; i < len(realData); i += batchSize {
+        end := i + batchSize
+        if end > len(realData) {
+            end = len(realData)
+        }
+        
+        batchReal := realData[i:end]
+        batchSize := len(batchReal)
+        
+        // Реальные данные
+        realLoss := 0.0
+        for _, data := range batchReal {
+            prediction := gan.Discriminator.Forward(data)
+            // Дискриминатор должен предсказать 1 для реальных данных
+            realLoss += -math.Log(prediction)
+        }
+        realLoss /= float64(batchSize)
+        
+        // Сгенерированные данные
+        fakeLoss := 0.0
+        for j := 0; j < batchSize; j++ {
+            noise := make([]float64, gan.NoiseSize)
+            for k := range noise {
+                noise[k] = rand.NormFloat64()
+            }
+            
+            fakeData := gan.Generator.Forward(noise)
+            prediction := gan.Discriminator.Forward(fakeData)
+            // Дискриминатор должен предсказать 0 для сгенерированных данных
+            fakeLoss += -math.Log(1 - prediction)
+        }
+        fakeLoss /= float64(batchSize)
+        
+        totalLoss += (realLoss + fakeLoss) / 2
+        batches++
+    }
+    
+    return totalLoss / float64(batches)
+}
+
+func (gan *GAN) trainGenerator(batchSize int) float64 {
+    totalLoss := 0.0
+    batches := 0
+    
+    for i := 0; i < 5; i++ { // Обучаем генератор несколько раз за эпоху
+        batchLoss := 0.0
+        
+        for j := 0; j < batchSize; j++ {
+            noise := make([]float64, gan.NoiseSize)
+            for k := range noise {
+                noise[k] = rand.NormFloat64()
+            }
+            
+            fakeData := gan.Generator.Forward(noise)
+            prediction := gan.Discriminator.Forward(fakeData)
+            
+            // Генератор хочет, чтобы дискриминатор предсказал 1 для сгенерированных данных
+            batchLoss += -math.Log(prediction)
+        }
+        
+        totalLoss += batchLoss / float64(batchSize)
+        batches++
+    }
+    
+    return totalLoss / float64(batches)
+}
+
+func (gan *GAN) Generate(numSamples int) [][]float64 {
+    samples := make([][]float64, numSamples)
+    
+    for i := 0; i < numSamples; i++ {
+        noise := make([]float64, gan.NoiseSize)
+        for j := range noise {
+            noise[j] = rand.NormFloat64()
+        }
+        
+        sample := gan.Generator.Forward(noise)
+        samples[i] = sample
+    }
+    
+    return samples
+}
+
+func main() {
+    rand.Seed(42)
+    
+    // Создание GAN для генерации 2D данных
+    noiseSize := 10
+    dataSize := 2
+    hiddenSize := 64
+    
+    gan := NewGAN(noiseSize, dataSize, hiddenSize, 0.001)
+    
+    // Генерация реальных данных (круг)
+    fmt.Println("Generating real data (circle)...")
+    numRealSamples := 1000
+    realData := make([][]float64, numRealSamples)
+    
+    for i := 0; i < numRealSamples; i++ {
+        angle := rand.Float64() * 2 * math.Pi
+        radius := 2.0
+        
+        x := radius * math.Cos(angle) + rand.NormFloat64()*0.1
+        y := radius * math.Sin(angle) + rand.NormFloat64()*0.1
+        
+        realData[i] = []float64{x, y}
+    }
+    
+    fmt.Println("Training GAN...")
+    gan.Train(realData, 1000, 32)
+    
+    // Генерация новых данных
+    fmt.Println("\nGenerating new samples...")
+    generatedSamples := gan.Generate(10)
+    
+    fmt.Println("Generated samples:")
+    for i, sample := range generatedSamples {
+        fmt.Printf("Sample %d: (%.3f, %.3f)\n", i+1, sample[0], sample[1])
+    }
+    
+    // Оценка качества генерации
+    fmt.Println("\nQuality evaluation:")
+    
+    // Проверка, лежат ли сгенерированные точки на круге
+    correct := 0
+    for _, sample := range generatedSamples {
+        distance := math.Sqrt(sample[0]*sample[0] + sample[1]*sample[1])
+        if math.Abs(distance-2.0) < 0.5 {
+            correct++
+        }
+    }
+    
+    fmt.Printf("Samples on circle: %d/%d (%.1f%%)\n", 
+        correct, len(generatedSamples), float64(correct)/float64(len(generatedSamples))*100)
+    
+    // Генерация большего количества samples для визуализации
+    manySamples := gan.Generate(100)
+    
+    fmt.Println("\nStatistics of 100 generated samples:")
+    var avgX, avgY, stdX, stdY float64
+    
+    for _, sample := range manySamples {
+        avgX += sample[0]
+        avgY += sample[1]
+    }
+    avgX /= 100
+    avgY /= 100
+    
+    for _, sample := range manySamples {
+        stdX += (sample[0] - avgX) * (sample[0] - avgX)
+        stdY += (sample[1] - avgY) * (sample[1] - avgY)
+    }
+    stdX = math.Sqrt(stdX / 100)
+    stdY = math.Sqrt(stdY / 100)
+    
+    fmt.Printf("Mean: (%.3f, %.3f)\n", avgX, avgY)
+    fmt.Printf("Std:  (%.3f, %.3f)\n", stdX, stdY)
+}
+Задание: Генеративно-состязательная сеть для создания синтетических данных
+
+157. Reinforcement Learning - Q-learning
+go
+package main
+import (
+    "fmt"
+    "math"
+    "math/rand"
+)
+
+type QLearning struct {
+    QTable      map[string]map[int]float64
+    LearningRate float64
+    Discount     float64
+    Exploration  float64
+    MinExploration float64
+    ExplorationDecay float64
+}
+
+type Environment struct {
+    States  []string
+    Actions []int
+    Rewards map[string]float64
+    CurrentState string
+}
+
+func NewQLearning(learningRate, discount, exploration float64) *QLearning {
+    return &QLearning{
+        QTable:          make(map[string]map[int]float64),
+        LearningRate:    learningRate,
+        Discount:        discount,
+        Exploration:     exploration,
+        MinExploration:  0.01,
+        ExplorationDecay: 0.995,
+    }
+}
+
+func NewEnvironment() *Environment {
+    states := []string{
+        "start", "state1", "state2", "state3", "goal",
+        "trap1", "trap2",
+    }
+    
+    actions := []int{0, 1, 2, 3} // up, right, down, left
+    
+    rewards := map[string]float64{
+        "start": 0,
+        "state1": 0,
+        "state2": 0,
+        "state3": 0,
+        "goal":  100,
+        "trap1": -50,
+        "trap2": -50,
+    }
+    
+    return &Environment{
+        States:  states,
+        Actions: actions,
+        Rewards: rewards,
+        CurrentState: "start",
+    }
+}
+
+func (env *Environment) Reset() string {
+    env.CurrentState = "start"
+    return env.CurrentState
+}
+
+func (env *Environment) Step(action int) (string, float64, bool) {
+    nextState := env.getNextState(env.CurrentState, action)
+    reward := env.Rewards[nextState]
+    done := (nextState == "goal" || nextState == "trap1" || nextState == "trap2")
+    
+    env.CurrentState = nextState
+    return nextState, reward, done
+}
+
+func (env *Environment) getNextState(state string, action int) string {
+    transitions := map[string]map[int]string{
+        "start": {
+            0: "trap1",
+            1: "state1",
+            2: "start",
+            3: "trap2",
+        },
+        "state1": {
+            0: "state1",
+            1: "state2",
+            2: "start",
+            3: "state1",
+        },
+        "state2": {
+            0: "state1",
+            1: "state3",
+            2: "state2",
+            3: "state2",
+        },
+        "state3": {
+            0: "state2",
+            1: "goal",
+            2: "state3",
+            3: "trap1",
+        },
+        "trap1": {
+            0: "trap1", 1: "trap1", 2: "trap1", 3: "trap1",
+        },
+        "trap2": {
+            0: "trap2", 1: "trap2", 2: "trap2", 3: "trap2",
+        },
+        "goal": {
+            0: "goal", 1: "goal", 2: "goal", 3: "goal",
+        },
+    }
+    
+    return transitions[state][action]
+}
+
+func (ql *QLearning) GetQValue(state string, action int) float64 {
+    if _, exists := ql.QTable[state]; !exists {
+        ql.QTable[state] = make(map[int]float64)
+        for _, a := range []int{0, 1, 2, 3} {
+            ql.QTable[state][a] = 0
+        }
+    }
+    return ql.QTable[state][action]
+}
+
+func (ql *QLearning) SetQValue(state string, action int, value float64) {
+    if _, exists := ql.QTable[state]; !exists {
+        ql.QTable[state] = make(map[int]float64)
+    }
+    ql.QTable[state][action] = value
+}
+
+func (ql *QLearning) ChooseAction(state string) int {
+    // ε-greedy стратегия
+    if rand.Float64() < ql.Exploration {
+        // Случайное действие (exploration)
+        return rand.Intn(4)
+    } else {
+        // Лучшее действие (exploitation)
+        return ql.GetBestAction(state)
+    }
+}
+
+func (ql *QLearning) GetBestAction(state string) int {
+    bestAction := 0
+    bestValue := math.Inf(-1)
+    
+    for action := 0; action < 4; action++ {
+        value := ql.GetQValue(state, action)
+        if value > bestValue {
+            bestValue = value
+            bestAction = action
+        }
+    }
+    
+    return bestAction
+}
+
+func (ql *QLearning) Update(state string, action int, reward float64, nextState string) {
+    currentQ := ql.GetQValue(state, action)
+    
+    // Максимальное Q-value для следующего состояния
+    maxNextQ := math.Inf(-1)
+    for a := 0; a < 4; a++ {
+        nextQ := ql.GetQValue(nextState, a)
+        if nextQ > maxNextQ {
+            maxNextQ = nextQ
+        }
+    }
+    
+    // Q-learning формула
+    newQ := currentQ + ql.LearningRate * (reward + ql.Discount * maxNextQ - currentQ)
+    ql.SetQValue(state, action, newQ)
+}
+
+func (ql *QLearning) Train(env *Environment, episodes int) {
+    for episode := 0; episode < episodes; episode++ {
+        state := env.Reset()
+        totalReward := 0.0
+        steps := 0
+        
+        for {
+            action := ql.ChooseAction(state)
+            nextState, reward, done := env.Step(action)
+            
+            ql.Update(state, action, reward, nextState)
+            
+            state = nextState
+            totalReward += reward
+            steps++
+            
+            if done {
+                break
+            }
+            
+            if steps > 100 { // Защита от бесконечных циклов
+                break
+            }
+        }
+        
+        // Decay exploration rate
+        ql.Exploration = math.Max(ql.MinExploration, ql.Exploration * ql.ExplorationDecay)
+        
+        if episode%100 == 0 {
+            fmt.Printf("Episode %d: steps=%d, reward=%.1f, exploration=%.3f\n", 
+                episode, steps, totalReward, ql.Exploration)
+        }
+    }
+}
+
+func (ql *QLearning) Test(env *Environment, episodes int) {
+    totalRewards := 0.0
+    successes := 0
+    
+    for episode := 0; episode < episodes; episode++ {
+        state := env.Reset()
+        totalReward := 0.0
+        steps := 0
+        
+        for {
+            action := ql.GetBestAction(state) // Всегда лучшее действие
+            nextState, reward, done := env.Step(action)
+            
+            state = nextState
+            totalReward += reward
+            steps++
+            
+            if done {
+                if state == "goal" {
+                    successes++
+                }
+                break
+            }
+            
+            if steps > 100 {
+                break
+            }
+        }
+        
+        totalRewards += totalReward
+    }
+    
+    avgReward := totalRewards / float64(episodes)
+    successRate := float64(successes) / float64(episodes) * 100
+    
+    fmt.Printf("\nTest Results (%d episodes):\n", episodes)
+    fmt.Printf("Average Reward: %.2f\n", avgReward)
+    fmt.Printf("Success Rate: %.1f%%\n", successRate)
+}
+
+func (ql *QLearning) PrintPolicy() {
+    fmt.Println("\nLearned Policy:")
+    
+    states := []string{"start", "state1", "state2", "state3"}
+    actionNames := map[int]string{0: "↑", 1: "→", 2: "↓", 3: "←"}
+    
+    for _, state := range states {
+        bestAction := ql.GetBestAction(state)
+        bestValue := ql.GetQValue(state, bestAction)
+        
+        fmt.Printf("%s: %s (Q=%.2f) [", state, actionNames[bestAction], bestValue)
+        for action := 0; action < 4; action++ {
+            fmt.Printf("%s:%.2f ", actionNames[action], ql.GetQValue(state, action))
+        }
+        fmt.Printf("]\n")
+    }
+}
+
+func main() {
+    rand.Seed(42)
+    
+    // Создание среды и агента
+    env := NewEnvironment()
+    ql := NewQLearning(0.1, 0.9, 1.0)
+    
+    fmt.Println("Training Q-learning agent...")
+    ql.Train(env, 1000)
+    
+    // Тестирование обученного агента
+    ql.Test(env, 100)
+    
+    // Вывод изученной политики
+    ql.PrintPolicy()
+    
+    // Демонстрация одного эпизода
+    fmt.Println("\nDemonstration episode:")
+    state := env.Reset()
+    fmt.Printf("Start state: %s\n", state)
+    
+    steps := 0
+    for {
+        action := ql.GetBestAction(state)
+        nextState, reward, done := env.Step(action)
+        
+        actionNames := map[int]string{0: "↑", 1: "→", 2: "↓", 3: "←"}
+        fmt.Printf("Step %d: %s -> %s (%s), Reward: %.1f\n", 
+            steps, state, nextState, actionNames[action], reward)
+        
+        state = nextState
+        steps++
+        
+        if done {
+            if state == "goal" {
+                fmt.Println("🎉 Reached goal!")
+            } else {
+                fmt.Println("💥 Fell into trap!")
+            }
+            break
+        }
+        
+        if steps > 20 {
+            fmt.Println("⏰ Timeout!")
+            break
+        }
+    }
+}
+Задание: Q-learning для reinforcement learning с ε-greedy стратегией
+
+Это 157 примеров из 200. Хотите, чтобы я продолжил с оставшимися 43 примерами? Они будут охватывать: обработку аудио, криптовалюты, IoT, квантовые вычисления и другие cutting-edge технологии.
+
+продолжай
+Продолжаю с оставшимися 43 примерами, охватывающими передовые технологии:
+
+Обработка аудио и мультимедиа
+158. Аудио обработка - генерация и анализ звука
+go
+package main
+import (
+    "encoding/binary"
+    "fmt"
+    "math"
+    "os"
+)
+
+type AudioProcessor struct {
+    SampleRate float64
+    BitDepth   int
+}
+
+type WaveHeader struct {
+    ChunkID       [4]byte
+    ChunkSize     uint32
+    Format        [4]byte
+    Subchunk1ID   [4]byte
+    Subchunk1Size uint32
+    AudioFormat   uint16
+    NumChannels   uint16
+    SampleRate    uint32
+    ByteRate      uint32
+    BlockAlign    uint16
+    BitsPerSample uint16
+    Subchunk2ID   [4]byte
+    Subchunk2Size uint32
+}
+
+func NewAudioProcessor(sampleRate float64, bitDepth int) *AudioProcessor {
+    return &AudioProcessor{
+        SampleRate: sampleRate,
+        BitDepth:   bitDepth,
+    }
+}
+
+func (ap *AudioProcessor) GenerateSineWave(frequency, duration float64) []float64 {
+    numSamples := int(ap.SampleRate * duration)
+    samples := make([]float64, numSamples)
+    
+    for i := 0; i < numSamples; i++ {
+        time := float64(i) / ap.SampleRate
+        samples[i] = math.Sin(2 * math.Pi * frequency * time)
+    }
+    
+    return samples
+}
+
+func (ap *AudioProcessor) GenerateSquareWave(frequency, duration float64) []float64 {
+    numSamples := int(ap.SampleRate * duration)
+    samples := make([]float64, numSamples)
+    
+    for i := 0; i < numSamples; i++ {
+        time := float64(i) / ap.SampleRate
+        phase := 2 * math.Pi * frequency * time
+        if math.Sin(phase) >= 0 {
+            samples[i] = 1.0
+        } else {
+            samples[i] = -1.0
+        }
+    }
+    
+    return samples
+}
+
+func (ap *AudioProcessor) GenerateSawtoothWave(frequency, duration float64) []float64 {
+    numSamples := int(ap.SampleRate * duration)
+    samples := make([]float64, numSamples)
+    
+    for i := 0; i < numSamples; i++ {
+        time := float64(i) / ap.SampleRate
+        phase := math.Mod(time*frequency, 1.0)
+        samples[i] = 2*phase - 1
+    }
+    
+    return samples
+}
+
+func (ap *AudioProcessor) MixWaves(waves ...[]float64) []float64 {
+    if len(waves) == 0 {
+        return nil
+    }
+    
+    length := len(waves[0])
+    mixed := make([]float64, length)
+    
+    for _, wave := range waves {
+        for i := range wave {
+            if i < length {
+                mixed[i] += wave[i]
+            }
+        }
+    }
+    
+    // Нормализация
+    maxAmplitude := 0.0
+    for i := range mixed {
+        if math.Abs(mixed[i]) > maxAmplitude {
+            maxAmplitude = math.Abs(mixed[i])
+        }
+    }
+    
+    if maxAmplitude > 0 {
+        for i := range mixed {
+            mixed[i] /= maxAmplitude
+        }
+    }
+    
+    return mixed
+}
+
+func (ap *AudioProcessor) ApplyFade(samples []float64, fadeIn, fadeOut float64) []float64 {
+    result := make([]float64, len(samples))
+    copy(result, samples)
+    
+    fadeInSamples := int(ap.SampleRate * fadeIn)
+    fadeOutSamples := int(ap.SampleRate * fadeOut)
+    
+    // Fade in
+    for i := 0; i < fadeInSamples && i < len(result); i++ {
+        factor := float64(i) / float64(fadeInSamples)
+        result[i] *= factor
+    }
+    
+    // Fade out
+    for i := 0; i < fadeOutSamples && i < len(result); i++ {
+        idx := len(result) - 1 - i
+        factor := float64(i) / float64(fadeOutSamples)
+        result[idx] *= factor
+    }
+    
+    return result
+}
+
+func (ap *AudioProcessor) SaveWAV(filename string, samples []float64) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    // Подготовка заголовка WAV
+    header := WaveHeader{
+        ChunkID:       [4]byte{'R', 'I', 'F', 'F'},
+        Format:        [4]byte{'W', 'A', 'V', 'E'},
+        Subchunk1ID:   [4]byte{'f', 'm', 't', ' '},
+        Subchunk1Size: 16,
+        AudioFormat:   1, // PCM
+        NumChannels:   1, // Mono
+        SampleRate:    uint32(ap.SampleRate),
+        BitsPerSample: uint16(ap.BitDepth),
+    }
+    
+    header.BlockAlign = header.NumChannels * header.BitsPerSample / 8
+    header.ByteRate = header.SampleRate * uint32(header.BlockAlign)
+    
+    dataSize := uint32(len(samples) * int(header.BitsPerSample) / 8)
+    header.ChunkSize = 4 + (8 + header.Subchunk1Size) + (8 + dataSize)
+    header.Subchunk2ID = [4]byte{'d', 'a', 't', 'a'}
+    header.Subchunk2Size = dataSize
+    
+    // Запись заголовка
+    binary.Write(file, binary.LittleEndian, &header)
+    
+    // Запись данных
+    for _, sample := range samples {
+        // Конвертация в 16-bit PCM
+        pcmValue := int16(sample * 32767)
+        binary.Write(file, binary.LittleEndian, pcmValue)
+    }
+    
+    return nil
+}
+
+func (ap *AudioProcessor) FFT(samples []float64) []complex128 {
+    n := len(samples)
+    if n == 1 {
+        return []complex128{complex(samples[0], 0)}
+    }
+    
+    // Разделение на четные и нечетные
+    even := make([]float64, n/2)
+    odd := make([]float64, n/2)
+    
+    for i := 0; i < n/2; i++ {
+        even[i] = samples[2*i]
+        odd[i] = samples[2*i+1]
+    }
+    
+    // Рекурсивное вычисление FFT
+    evenFFT := ap.FFT(even)
+    oddFFT := ap.FFT(odd)
+    
+    // Комбинирование результатов
+    result := make([]complex128, n)
+    for k := 0; k < n/2; k++ {
+        angle := -2 * math.Pi * float64(k) / float64(n)
+        twiddle := complex(math.Cos(angle), math.Sin(angle))
+        
+        result[k] = evenFFT[k] + twiddle*oddFFT[k]
+        result[k+n/2] = evenFFT[k] - twiddle*oddFFT[k]
+    }
+    
+    return result
+}
+
+func (ap *AudioProcessor) CalculateSpectrum(samples []float64) []float64 {
+    // Применение оконной функции Хэннинга
+    windowed := make([]float64, len(samples))
+    for i := range samples {
+        window := 0.5 * (1 - math.Cos(2*math.Pi*float64(i)/float64(len(samples)-1)))
+        windowed[i] = samples[i] * window
+    }
+    
+    // FFT
+    fftResult := ap.FFT(windowed)
+    
+    // Вычисление амплитудного спектра
+    spectrum := make([]float64, len(fftResult)/2)
+    for i := range spectrum {
+        re := real(fftResult[i])
+        im := imag(fftResult[i])
+        spectrum[i] = math.Sqrt(re*re + im*im)
+    }
+    
+    return spectrum
+}
+
+func (ap *AudioProcessor) FindFundamentalFrequency(samples []float64) float64 {
+    spectrum := ap.CalculateSpectrum(samples)
+    
+    // Поиск пика в спектре (исключая DC компонент)
+    maxAmp := 0.0
+    maxBin := 0
+    
+    for i := 1; i < len(spectrum)/2; i++ { // Игнорируем верхнюю половину (симметрия)
+        if spectrum[i] > maxAmp {
+            maxAmp = spectrum[i]
+            maxBin = i
+        }
+    }
+    
+    // Конвертация бина в частоту
+    fundamentalFreq := float64(maxBin) * ap.SampleRate / float64(len(samples))
+    return fundamentalFreq
+}
+
+func main() {
+    ap := NewAudioProcessor(44100, 16)
+    
+    fmt.Println("=== Audio Synthesis and Analysis ===")
+    
+    // Генерация различных волн
+    sine := ap.GenerateSineWave(440, 2.0)      // Ля 440 Гц
+    square := ap.GenerateSquareWave(220, 2.0)  // Ля 220 Гц
+    sawtooth := ap.GenerateSawtoothWave(330, 2.0) // Ми 330 Гц
+    
+    // Смешивание волн
+    mixed := ap.MixWaves(sine, square, sawtooth)
+    
+    // Применение fade in/out
+    mixedWithFade := ap.ApplyFade(mixed, 0.1, 0.1)
+    
+    // Сохранение в WAV файл
+    err := ap.SaveWAV("output.wav", mixedWithFade)
+    if err != nil {
+        fmt.Printf("Error saving WAV: %v\n", err)
+    } else {
+        fmt.Println("Audio saved: output.wav")
+    }
+    
+    // Анализ аудио
+    fmt.Println("\n=== Audio Analysis ===")
+    
+    // Генерация тестового сигнала для анализа
+    testSignal := ap.GenerateSineWave(1000, 1.0) // 1 кГц
+    fundamental := ap.FindFundamentalFrequency(testSignal)
+    
+    fmt.Printf("Generated 1000 Hz signal\n")
+    fmt.Printf("Detected fundamental frequency: %.2f Hz\n", fundamental)
+    
+    // Спектральный анализ
+    spectrum := ap.CalculateSpectrum(testSignal)
+    
+    fmt.Println("\nFirst 10 frequency bins:")
+    for i := 0; i < 10 && i < len(spectrum); i++ {
+        freq := float64(i) * ap.SampleRate / float64(len(testSignal))
+        fmt.Printf("Bin %d: %.1f Hz, Amplitude: %.2f\n", i, freq, spectrum[i])
+    }
+    
+    // Создание аккорда
+    fmt.Println("\n=== Chord Generation ===")
+    chordFrequencies := []float64{261.63, 329.63, 392.00} // C, E, G
+    var chordWaves [][]float64
+    
+    for _, freq := range chordFrequencies {
+        wave := ap.GenerateSineWave(freq, 3.0)
+        chordWaves = append(chordWaves, wave)
+    }
+    
+    chord := ap.MixWaves(chordWaves...)
+    chord = ap.ApplyFade(chord, 0.5, 0.5)
+    
+    ap.SaveWAV("chord.wav", chord)
+    fmt.Println("Chord saved: chord.wav")
+    
+    // Анализ аккорда
+    chordFundamental := ap.FindFundamentalFrequency(chord)
+    fmt.Printf("Chord fundamental frequency: %.2f Hz\n", chordFundamental)
+}
+Задание: Генерация и анализ аудио сигналов с FFT
+
+159. Криптовалютный кошелек и транзакции
+go
+package main
+import (
+    "crypto/ecdsa"
+    "crypto/elliptic"
+    "crypto/rand"
+    "crypto/sha256"
+    "encoding/hex"
+    "fmt"
+    "math/big"
+)
+
+type Wallet struct {
+    PrivateKey *ecdsa.PrivateKey
+    PublicKey  *ecdsa.PublicKey
+    Address    string
+}
+
+type Transaction struct {
+    From   string
+    To     string
+    Amount float64
+    Fee    float64
+    Nonce  int
+    Signature string
+    Hash     string
+}
+
+type Block struct {
+    Index        int
+    Timestamp    int64
+    Transactions []*Transaction
+    PreviousHash string
+    Hash         string
+    Nonce        int
+}
+
+type Blockchain struct {
+    Chain        []*Block
+    PendingTransactions []*Transaction
+    Difficulty   int
+    MiningReward float64
+}
+
+func NewWallet() *Wallet {
+    privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+    if err != nil {
+        return nil
+    }
+    
+    publicKey := &privateKey.PublicKey
+    
+    // Генерация адреса из публичного ключа
+    publicKeyBytes := append(publicKey.X.Bytes(), publicKey.Y.Bytes()...)
+    hash := sha256.Sum256(publicKeyBytes)
+    address := hex.EncodeToString(hash[:20]) // Берем первые 20 байт
+    
+    return &Wallet{
+        PrivateKey: privateKey,
+        PublicKey:  publicKey,
+        Address:    address,
+    }
+}
+
+func (w *Wallet) Sign(data []byte) (string, error) {
+    hash := sha256.Sum256(data)
+    r, s, err := ecdsa.Sign(rand.Reader, w.PrivateKey, hash[:])
+    if err != nil {
+        return "", err
+    }
+    
+    signature := append(r.Bytes(), s.Bytes()...)
+    return hex.EncodeToString(signature), nil
+}
+
+func VerifySignature(publicKey *ecdsa.PublicKey, data []byte, signature string) bool {
+    sigBytes, err := hex.DecodeString(signature)
+    if err != nil {
+        return false
+    }
+    
+    if len(sigBytes) != 64 { // 32 bytes for r + 32 bytes for s
+        return false
+    }
+    
+    r := new(big.Int).SetBytes(sigBytes[:32])
+    s := new(big.Int).SetBytes(sigBytes[32:])
+    
+    hash := sha256.Sum256(data)
+    return ecdsa.Verify(publicKey, hash[:], r, s)
+}
+
+func NewTransaction(from, to string, amount, fee float64, nonce int) *Transaction {
+    tx := &Transaction{
+        From:   from,
+        To:     to,
+        Amount: amount,
+        Fee:    fee,
+        Nonce:  nonce,
+    }
+    
+    tx.Hash = tx.CalculateHash()
+    return tx
+}
+
+func (tx *Transaction) CalculateHash() string {
+    data := fmt.Sprintf("%s%s%.8f%.8f%d", tx.From, tx.To, tx.Amount, tx.Fee, tx.Nonce)
+    hash := sha256.Sum256([]byte(data))
+    return hex.EncodeToString(hash[:])
+}
+
+func (tx *Transaction) Sign(wallet *Wallet) error {
+    if wallet.Address != tx.From {
+        return fmt.Errorf("cannot sign transaction from other wallet")
+    }
+    
+    signature, err := wallet.Sign([]byte(tx.Hash))
+    if err != nil {
+        return err
+    }
+    
+    tx.Signature = signature
+    return nil
+}
+
+func (tx *Transaction) IsValid() bool {
+    if tx.Amount <= 0 {
+        return false
+    }
+    
+    if tx.From == "" { // Mining reward transaction
+        return true
+    }
+    
+    if tx.Signature == "" {
+        return false
+    }
+    
+    // В реальной системе здесь была бы проверка подписи
+    // и баланса отправителя
+    return true
+}
+
+func NewBlockchain(difficulty int, miningReward float64) *Blockchain {
+    bc := &Blockchain{
+        Difficulty:   difficulty,
+        MiningReward: miningReward,
+    }
+    
+    // Создание генезис-блока
+    genesisBlock := &Block{
+        Index:        0,
+        Timestamp:    1625097600, // Пример timestamp
+        Transactions: []*Transaction{},
+        PreviousHash: "0",
+        Nonce:        0,
+    }
+    
+    genesisBlock.Hash = bc.CalculateHash(genesisBlock)
+    bc.Chain = []*Block{genesisBlock}
+    
+    return bc
+}
+
+func (bc *Blockchain) CalculateHash(block *Block) string {
+    data := fmt.Sprintf("%d%d%s%s%d", 
+        block.Index, block.Timestamp, 
+        bc.SerializeTransactions(block.Transactions),
+        block.PreviousHash, block.Nonce)
+    
+    hash := sha256.Sum256([]byte(data))
+    return hex.EncodeToString(hash[:])
+}
+
+func (bc *Blockchain) SerializeTransactions(txs []*Transaction) string {
+    var result string
+    for _, tx := range txs {
+        result += tx.Hash
+    }
+    return result
+}
+
+func (bc *Blockchain) GetLatestBlock() *Block {
+    return bc.Chain[len(bc.Chain)-1]
+}
+
+func (bc *Blockchain) AddTransaction(tx *Transaction) bool {
+    if !tx.IsValid() {
+        return false
+    }
+    
+    bc.PendingTransactions = append(bc.PendingTransactions, tx)
+    return true
+}
+
+func (bc *Blockchain) MineBlock(minerAddress string) {
+    // Награда за майнинг
+    rewardTx := NewTransaction("", minerAddress, bc.MiningReward, 0, 0)
+    bc.PendingTransactions = append(bc.PendingTransactions, rewardTx)
+    
+    block := &Block{
+        Index:        len(bc.Chain),
+        Timestamp:    1625097600 + int64(len(bc.Chain)*600), // +10 минут за блок
+        Transactions: bc.PendingTransactions,
+        PreviousHash: bc.GetLatestBlock().Hash,
+        Nonce:        0,
+    }
+    
+    // Proof of Work
+    for {
+        block.Hash = bc.CalculateHash(block)
+        if bc.IsValidHash(block.Hash) {
+            break
+        }
+        block.Nonce++
+    }
+    
+    bc.Chain = append(bc.Chain, block)
+    bc.PendingTransactions = []*Transaction{}
+}
+
+func (bc *Blockchain) IsValidHash(hash string) bool {
+    prefix := ""
+    for i := 0; i < bc.Difficulty; i++ {
+        prefix += "0"
+    }
+    return len(hash) >= bc.Difficulty && hash[:bc.Difficulty] == prefix
+}
+
+func (bc *Blockchain) IsChainValid() bool {
+    for i := 1; i < len(bc.Chain); i++ {
+        currentBlock := bc.Chain[i]
+        previousBlock := bc.Chain[i-1]
+        
+        // Проверка хеша блока
+        if currentBlock.Hash != bc.CalculateHash(currentBlock) {
+            return false
+        }
+        
+        // Проверка связи с предыдущим блоком
+        if currentBlock.PreviousHash != previousBlock.Hash {
+            return false
+        }
+        
+        // Проверка Proof of Work
+        if !bc.IsValidHash(currentBlock.Hash) {
+            return false
+        }
+    }
+    return true
+}
+
+func (bc *Blockchain) GetBalance(address string) float64 {
+    balance := 0.0
+    
+    for _, block := range bc.Chain {
+        for _, tx := range block.Transactions {
+            if tx.From == address {
+                balance -= tx.Amount + tx.Fee
+            }
+            if tx.To == address {
+                balance += tx.Amount
+            }
+        }
+    }
+    
+    return balance
+}
+
+func main() {
+    fmt.Println("=== Cryptocurrency Wallet and Blockchain Demo ===")
+    
+    // Создание кошельков
+    wallet1 := NewWallet()
+    wallet2 := NewWallet()
+    minerWallet := NewWallet()
+    
+    fmt.Printf("Wallet 1: %s\n", wallet1.Address)
+    fmt.Printf("Wallet 2: %s\n", wallet2.Address)
+    fmt.Printf("Miner Wallet: %s\n", minerWallet.Address)
+    
+    // Создание блокчейна
+    blockchain := NewBlockchain(2, 50.0) // Сложность 2, награда 50
+    
+    // Майнинг начальных блоков для создания баланса
+    fmt.Println("\nMining initial blocks...")
+    blockchain.MineBlock(minerWallet.Address)
+    blockchain.MineBlock(minerWallet.Address)
+    
+    // Создание транзакций
+    fmt.Println("\nCreating transactions...")
+    
+    // Транзакция от майнера к wallet1
+    tx1 := NewTransaction(minerWallet.Address, wallet1.Address, 25.0, 0.1, 1)
+    tx1.Sign(minerWallet)
+    blockchain.AddTransaction(tx1)
+    
+    // Транзакция от wallet1 к wallet2
+    tx2 := NewTransaction(wallet1.Address, wallet2.Address, 10.0, 0.1, 1)
+    tx2.Sign(wallet1)
+    blockchain.AddTransaction(tx2)
+    
+    // Майнинг блока с транзакциями
+    blockchain.MineBlock(minerWallet.Address)
+    
+    // Проверка балансов
+    fmt.Println("\n=== Balances ===")
+    fmt.Printf("Miner: %.2f\n", blockchain.GetBalance(minerWallet.Address))
+    fmt.Printf("Wallet 1: %.2f\n", blockchain.GetBalance(wallet1.Address))
+    fmt.Printf("Wallet 2: %.2f\n", blockchain.GetBalance(wallet2.Address))
+    
+    // Информация о блокчейне
+    fmt.Println("\n=== Blockchain Info ===")
+    fmt.Printf("Blockchain length: %d\n", len(blockchain.Chain))
+    fmt.Printf("Pending transactions: %d\n", len(blockchain.PendingTransactions))
+    fmt.Printf("Chain valid: %t\n", blockchain.IsChainValid())
+    
+    // Вывод информации о блоках
+    fmt.Println("\n=== Blocks ===")
+    for i, block := range blockchain.Chain {
+        fmt.Printf("Block %d: %s\n", i, block.Hash)
+        fmt.Printf("  Transactions: %d\n", len(block.Transactions))
+        fmt.Printf("  Nonce: %d\n", block.Nonce)
+        
+        for j, tx := range block.Transactions {
+            fmt.Printf("  TX %d: %s -> %s (%.2f)\n", 
+                j, tx.From, tx.To, tx.Amount)
+        }
+    }
+    
+    // Демонстрация безопасности
+    fmt.Println("\n=== Security Demo ===")
+    
+    // Попытка подделки транзакции
+    fakeTx := NewTransaction(minerWallet.Address, wallet2.Address, 100.0, 0.1, 1)
+    // Не подписываем - транзакция невалидна
+    if blockchain.AddTransaction(fakeTx) {
+        fmt.Println("ERROR: Fake transaction accepted!")
+    } else {
+        fmt.Println("✓ Fake transaction correctly rejected")
+    }
+    
+    // Проверка целостности блокчейна
+    if blockchain.IsChainValid() {
+        fmt.Println("✓ Blockchain integrity verified")
+    } else {
+        fmt.Println("ERROR: Blockchain corrupted!")
+    }
+}
+Задание: Криптовалютный кошелек и простой блокчейн с Proof of Work
+
+160. IoT устройство - симуляция умного дома
+go
+package main
+import (
+    "encoding/json"
+    "fmt"
+    "math/rand"
+    "net/http"
+    "sync"
+    "time"
+)
+
+type SensorData struct {
+    DeviceID    string  `json:"device_id"`
+    Temperature float64 `json:"temperature"`
+    Humidity    float64 `json:"humidity"`
+    LightLevel  float64 `json:"light_level"`
+    Motion      bool    `json:"motion"`
+    Timestamp   int64   `json:"timestamp"`
+}
+
+type Device struct {
+    ID       string
+    Name     string
+    Type     string
+    Location string
+    State    map[string]interface{}
+    mu       sync.RWMutex
+}
+
+type IoTPlatform struct {
+    Devices map[string]*Device
+    Data    []SensorData
+    mu      sync.RWMutex
+}
+
+func NewIoTPlatform() *IoTPlatform {
+    return &IoTPlatform{
+        Devices: make(map[string]*Device),
+        Data:    make([]SensorData, 0),
+    }
+}
+
+func (p *IoTPlatform) RegisterDevice(device *Device) {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    
+    p.Devices[device.ID] = device
+    fmt.Printf("Device registered: %s (%s) in %s\n", device.Name, device.Type, device.Location)
+}
+
+func (p *IoTPlatform) AddSensorData(data SensorData) {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    
+    p.Data = append(p.Data, data)
+    
+    // Автоматические действия на основе данных
+    p.processAutomation(data)
+}
+
+func (p *IoTPlatform) processAutomation(data SensorData) {
+    // Пример автоматизации: включение света при движении в темное время
+    if data.Motion && data.LightLevel < 30 {
+        if light, exists := p.Devices["light_living_room"]; exists {
+            light.mu.Lock()
+            light.State["on"] = true
+            light.State["brightness"] = 80
+            light.mu.Unlock()
+            fmt.Printf("Automation: Living room light turned on (motion detected)\n")
+        }
+    }
+    
+    // Автоматическое включение кондиционера при высокой температуре
+    if data.Temperature > 25 {
+        if ac, exists := p.Devices["ac_living_room"]; exists {
+            ac.mu.Lock()
+            ac.State["on"] = true
+            ac.State["temperature"] = 22.0
+            ac.mu.Unlock()
+            fmt.Printf("Automation: AC turned on (temperature: %.1f°C)\n", data.Temperature)
+        }
+    }
+}
+
+func (p *IoTPlatform) GetDeviceStatus(deviceID string) map[string]interface{} {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+    
+    if device, exists := p.Devices[deviceID]; exists {
+        device.mu.RLock()
+        defer device.mu.RUnlock()
+        
+        status := make(map[string]interface{})
+        for k, v := range device.State {
+            status[k] = v
+        }
+        status["name"] = device.Name
+        status["type"] = device.Type
+        status["location"] = device.Location
+        
+        return status
+    }
+    return nil
+}
+
+func (p *IoTPlatform) ControlDevice(deviceID string, command map[string]interface{}) bool {
+    p.mu.Lock()
+    defer p.mu.Unlock()
+    
+    if device, exists := p.Devices[deviceID]; exists {
+        device.mu.Lock()
+        defer device.mu.Unlock()
+        
+        for key, value := range command {
+            device.State[key] = value
+        }
+        
+        fmt.Printf("Device %s controlled: %v\n", deviceID, command)
+        return true
+    }
+    return false
+}
+
+func (p *IoTPlatform) GetStats() map[string]interface{} {
+    p.mu.RLock()
+    defer p.mu.RUnlock()
+    
+    stats := make(map[string]interface{})
+    stats["total_devices"] = len(p.Devices)
+    stats["total_data_points"] = len(p.Data)
+    
+    // Статистика по типам устройств
+    typeCount := make(map[string]int)
+    for _, device := range p.Devices {
+        typeCount[device.Type]++
+    }
+    stats["devices_by_type"] = typeCount
+    
+    return stats
+}
+
+func SimulateSensor(platform *IoTPlatform, deviceID string) {
+    for {
+        data := SensorData{
+            DeviceID:   deviceID,
+            Temperature: 20 + rand.Float64()*10, // 20-30°C
+            Humidity:   40 + rand.Float64()*30,  // 40-70%
+            LightLevel: rand.Float64() * 100,    // 0-100%
+            Motion:     rand.Float64() > 0.8,    // 20% chance
+            Timestamp:  time.Now().Unix(),
+        }
+        
+        platform.AddSensorData(data)
+        time.Sleep(5 * time.Second)
+    }
+}
+
+func StartWebServer(platform *IoTPlatform, port string) {
+    http.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        
+        platform.mu.RLock()
+        defer platform.mu.RUnlock()
+        
+        devices := make([]map[string]interface{}, 0)
+        for id, device := range platform.Devices {
+            device.mu.RLock()
+            info := map[string]interface{}{
+                "id":       id,
+                "name":     device.Name,
+                "type":     device.Type,
+                "location": device.Location,
+                "state":    device.State,
+            }
+            device.mu.RUnlock()
+            devices = append(devices, info)
+        }
+        
+        json.NewEncoder(w).Encode(devices)
+    })
+    
+    http.HandleFunc("/api/device/", func(w http.ResponseWriter, r *http.Request) {
+        deviceID := r.URL.Path[len("/api/device/"):]
+        
+        switch r.Method {
+        case "GET":
+            status := platform.GetDeviceStatus(deviceID)
+            if status == nil {
+                http.NotFound(w, r)
+                return
+            }
+            json.NewEncoder(w).Encode(status)
+            
+        case "POST":
+            var command map[string]interface{}
+            if err := json.NewDecoder(r.Body).Decode(&command); err != nil {
+                http.Error(w, "Invalid command", http.StatusBadRequest)
+                return
+            }
+            
+            if platform.ControlDevice(deviceID, command) {
+                w.WriteHeader(http.StatusOK)
+                fmt.Fprintf(w, `{"status": "success"}`)
+            } else {
+                http.NotFound(w, r)
+            }
+        }
+    })
+    
+    http.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
+        stats := platform.GetStats()
+        json.NewEncoder(w).Encode(stats)
+    })
+    
+    http.HandleFunc("/api/data", func(w http.ResponseWriter, r *http.Request) {
+        platform.mu.RLock()
+        defer platform.mu.RUnlock()
+        
+        // Возвращаем последние 10 записей
+        start := len(platform.Data) - 10
+        if start < 0 {
+            start = 0
+        }
+        json.NewEncoder(w).Encode(platform.Data[start:])
+    })
+    
+    fmt.Printf("IoT Platform API server started on :%s\n", port)
+    http.ListenAndServe(":"+port, nil)
+}
+
+func main() {
+    platform := NewIoTPlatform()
+    
+    // Регистрация устройств умного дома
+    devices := []*Device{
+        {
+            ID:       "sensor_living_room",
+            Name:     "Living Room Sensor",
+            Type:     "sensor",
+            Location: "Living Room",
+            State:    map[string]interface{}{},
+        },
+        {
+            ID:       "light_living_room",
+            Name:     "Living Room Light",
+            Type:     "light",
+            Location: "Living Room",
+            State:    map[string]interface{}{
+                "on": false,
+                "brightness": 0,
+                "color": "white",
+            },
+        },
+        {
+            ID:       "ac_living_room",
+            Name:     "Living Room AC",
+            Type:     "ac",
+            Location: "Living Room",
+            State:    map[string]interface{}{
+                "on": false,
+                "temperature": 22.0,
+                "mode": "cool",
+            },
+        },
+        {
+            ID:       "thermostat_bedroom",
+            Name:     "Bedroom Thermostat",
+            Type:     "thermostat",
+            Location: "Bedroom",
+            State:    map[string]interface{}{
+                "temperature": 21.0,
+                "target": 22.0,
+                "mode": "heat",
+            },
+        },
+    }
+    
+    for _, device := range devices {
+        platform.RegisterDevice(device)
+    }
+    
+    // Запуск симуляции сенсоров
+    go SimulateSensor(platform, "sensor_living_room")
+    
+    // Запуск веб-сервера
+    go StartWebServer(platform, "8080")
+    
+    // Демонстрация работы системы
+    fmt.Println("\n=== Smart Home IoT Platform Demo ===")
+    fmt.Println("API endpoints:")
+    fmt.Println("  GET  /api/devices - List all devices")
+    fmt.Println("  GET  /api/device/{id} - Get device status")
+    fmt.Println("  POST /api/device/{id} - Control device")
+    fmt.Println("  GET  /api/stats - Platform statistics")
+    fmt.Println("  GET  /api/data - Sensor data")
+    
+    // Демонстрация управления устройствами
+    time.Sleep(2 * time.Second)
+    
+    fmt.Println("\n=== Device Control Demo ===")
+    
+    // Включение света
+    platform.ControlDevice("light_living_room", map[string]interface{}{
+        "on": true,
+        "brightness": 75,
+    })
+    
+    // Установка температуры на AC
+    platform.ControlDevice("ac_living_room", map[string]interface{}{
+        "on": true,
+        "temperature": 23.0,
+        "mode": "cool",
+    })
+    
+    // Бесконечный цикл для отображения обновлений
+    ticker := time.NewTicker(10 * time.Second)
+    for range ticker.C {
+        stats := platform.GetStats()
+        fmt.Printf("\nSystem Stats: %d devices, %d data points\n", 
+            stats["total_devices"], stats["total_data_points"])
+        
+        // Показ статуса основных устройств
+        lightStatus := platform.GetDeviceStatus("light_living_room")
+        acStatus := platform.GetDeviceStatus("ac_living_room")
+        
+        fmt.Printf("Light: %v, AC: %v\n", 
+            lightStatus["on"], acStatus["on"])
+    }
+}
+Задание: IoT платформа для умного дома с автоматизацией и REST API
