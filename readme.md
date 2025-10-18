@@ -1,17 +1,16 @@
 Основы Go
 1. Простая программа
-go
+
+```go
 package main  // Объявление основного пакета
-
 import "fmt"  // Импорт пакета для ввода-вывода
-
 func main() {  // Главная функция программы
     fmt.Println("Hello, World!")  // Вывод текста в консоль
 }
 Задание: Базовая структура программы Go
-
+```
 2. Объявление переменных
-go
+```go
 package main
 import "fmt"
 
@@ -21,9 +20,9 @@ func main() {
     fmt.Println(name, age)     // Вывод значений
 }
 Задание: Демонстрация способов объявления переменных
-
+```
 3. Константы
-go
+```go
 package main
 import "fmt"
 
@@ -33,9 +32,9 @@ func main() {
     fmt.Println(Pi, AppName)  // Вывод констант
 }
 Задание: Работа с константами в Go
-
+```
 4. Основные типы данных
-go
+```go
 package main
 import "fmt"
 
@@ -47,9 +46,9 @@ func main() {
     fmt.Println(integer, floating, text, boolean)
 }
 Задание: Демонстрация основных типов данных
-
+```
 5. Арифметические операции
-go
+```go
 package main
 import "fmt"
 
@@ -63,9 +62,9 @@ func main() {
     fmt.Println(sum, diff, product, quotient, remainder)
 }
 Задание: Базовые арифметические операции
-
+```
 6. Строковые операции
-go
+```go
 package main
 import "fmt"
 
@@ -77,9 +76,9 @@ func main() {
     fmt.Println(fullName, "Длина:", length)
 }
 Задание: Операции со строками
-
+```
 7. Условные операторы
-go
+```go
 package main
 import "fmt"
 
@@ -92,9 +91,9 @@ func main() {
     }
 }
 Задание: Базовые условные конструкции
-
+```
 8. Множественные условия
-go
+```go
 package main
 import "fmt"
 
@@ -109,9 +108,9 @@ func main() {
     }
 }
 Задание: Использование else if для множественных условий
-
+```
 9. Оператор switch
-go
+```go
 package main
 import "fmt"
 
@@ -127,9 +126,9 @@ func main() {
     }
 }
 Задание: Использование switch для выбора
-
+```
 10. Цикл for
-go
+```go
 package main
 import "fmt"
 
@@ -139,9 +138,9 @@ func main() {
     }
 }
 Задание: Базовый цикл for
-
+```
 11. While-подобный цикл
-go
+```go
 package main
 import "fmt"
 
@@ -153,9 +152,9 @@ func main() {
     }
 }
 Задание: Цикл с условием (аналог while)
-
+```
 12. Бесконечный цикл
-go
+```go
 package main
 import "fmt"
 
@@ -170,9 +169,9 @@ func main() {
     }
 }
 Задание: Бесконечный цикл с break
-
+```
 13. Массивы
-go
+```go
 package main
 import "fmt"
 
@@ -184,9 +183,9 @@ func main() {
     fmt.Println(numbers)         // Вывод всего массива
 }
 Задание: Работа с массивами
-
+```
 14. Срезы (Slices)
-go
+```go
 package main
 import "fmt"
 
@@ -197,9 +196,9 @@ func main() {
     fmt.Println("Длина:", len(slice))  // Длина среза
 }
 Задание: Базовые операции со срезами
-
+```
 15. Карты (Maps)
-go
+```go
 package main
 import "fmt"
 
@@ -210,9 +209,9 @@ func main() {
     fmt.Println("Возраст Alice:", ages["Alice"])  // Доступ к элементу
 }
 Задание: Работа с ассоциативными массивами (map)
-
+```
 16. Функции
-go
+```go
 package main
 import "fmt"
 
@@ -225,9 +224,9 @@ func main() {
     fmt.Println("Результат:", result)
 }
 Задание: Создание и вызов функций
-
+```
 17. Функция с несколькими возвращаемыми значениями
-go
+```go
 package main
 import "fmt"
 
@@ -247,9 +246,9 @@ func main() {
     }
 }
 Задание: Функции с множественными возвращаемыми значениями
-
+```
 18. Анонимные функции
-go
+```go
 package main
 import "fmt"
 
@@ -263,9 +262,9 @@ func main() {
     fmt.Println("Умножение:", result)
 }
 Задание: Использование анонимных функций
-
+```
 19. Замыкания
-go
+```go
 package main
 import "fmt"
 
@@ -284,9 +283,9 @@ func main() {
     fmt.Println(next())  // 3
 }
 Задание: Демонстрация замыканий
-
+```
 20. Указатели
-go
+```go
 package main
 import "fmt"
 
@@ -301,9 +300,9 @@ func main() {
     fmt.Println("Новое значение x:", x)
 }
 Задание: Основы работы с указателями
-
+```
 21. Структуры
-go
+```go
 package main
 import "fmt"
 
@@ -320,9 +319,9 @@ func main() {
     fmt.Println(person.Name, person.Age)
 }
 Задание: Создание и использование структур
-
+```
 22. Методы структур
-go
+```go
 package main
 import "fmt"
 
@@ -341,9 +340,9 @@ func main() {
     fmt.Println("Площадь:", area)
 }
 Задание: Добавление методов к структурам
-
+```
 23. Интерфейсы
-go
+```go
 package main
 import "fmt"
 
@@ -368,9 +367,9 @@ func main() {
     printArea(circle)            // Использование интерфейса
 }
 Задание: Базовое использование интерфейсов
-
+```
 24. Горутины
-go
+```go
 package main
 import (
     "fmt"
@@ -390,9 +389,9 @@ func main() {
     fmt.Println("Главная функция завершена")
 }
 Задание: Базовое использование горутин
-
+```
 25. Каналы
-go
+```go
 package main
 import "fmt"
 
@@ -411,9 +410,9 @@ func main() {
     }
 }
 Задание: Базовое использование каналов
-
+```
 26. Буферизованные каналы
-go
+```go
 package main
 import "fmt"
 
@@ -425,9 +424,9 @@ func main() {
     fmt.Println(<-ch)
 }
 Задание: Использование буферизованных каналов
-
+```
 27. Select с каналами
-go
+```go
 package main
 import (
     "fmt"
@@ -458,9 +457,9 @@ func main() {
     }
 }
 Задание: Использование select для работы с каналами
-
+```
 28. Обработка ошибок
-go
+```go
 package main
 import (
     "errors"
@@ -484,9 +483,9 @@ func main() {
     }
 }
 Задание: Базовая обработка ошибок
-
+```
 29. Panic и Recover
-go
+```go
 package main
 import "fmt"
 
@@ -505,9 +504,9 @@ func main() {
     fmt.Println("Программа продолжает работу")
 }
 Задание: Обработка паник с recover
-
+```
 30. Defer
-go
+```go
 package main
 import "fmt"
 
@@ -519,9 +518,9 @@ func main() {
     fmt.Println("Еще один обычный вывод")
 }
 Задание: Использование defer для отложенных вызовов
-
+```
 31. Работа с файлами
-go
+```go
 package main
 import (
     "fmt"
@@ -546,9 +545,9 @@ func main() {
     fmt.Println("Прочитано из файла:", string(data))
 }
 Задание: Базовая работа с файлами
-
+```
 32. JSON маршалинг
-go
+```go
 package main
 import (
     "encoding/json"
@@ -582,9 +581,9 @@ func main() {
     fmt.Println("Объект:", newUser)
 }
 Задание: Работа с JSON
-
+```
 33. HTTP сервер
-go
+```go
 package main
 import (
     "fmt"
@@ -601,9 +600,9 @@ func main() {
     http.ListenAndServe(":8080", nil)        // Запуск сервера
 }
 Задание: Простой HTTP сервер
-
+```
 34. HTTP клиент
-go
+```go
 package main
 import (
     "fmt"
@@ -628,9 +627,9 @@ func main() {
     fmt.Println("Длина ответа:", len(body))
 }
 Задание: Создание HTTP клиента
-
+```
 35. Тестирование
-go
+```go
 package main
 import "fmt"
 
@@ -652,9 +651,9 @@ func main() {
     fmt.Println("Результат сложения:", Add(2, 3))
 }
 Задание: Структура тестирования в Go
-
+```
 36. Пакеты и импорты
-go
+```go
 package main
 import (
     "fmt"
@@ -670,9 +669,9 @@ func main() {
     fmt.Printf("Случайное: %d, Квадратный корень: %.2f\n", randomNum, sqrt)
 }
 Задание: Использование стандартных пакетов
-
+```
 37. Строки и руны
-go
+```go
 package main
 import "fmt"
 
@@ -688,9 +687,9 @@ func main() {
     }
 }
 Задание: Работа с Unicode строками
-
+```
 38. Ввод пользователя
-go
+```go
 package main
 import (
     "bufio"
@@ -712,9 +711,9 @@ func main() {
     fmt.Printf("Привет, %s! Тебе %d лет.\n", name[:len(name)-1], age)
 }
 Задание: Чтение ввода от пользователя
-
+```
 39. Время и дата
-go
+```go
 package main
 import (
     "fmt"
@@ -735,9 +734,9 @@ func main() {
     fmt.Println("Разница:", duration)
 }
 Задание: Работа с временем
-
+```
 40. Сортировка
-go
+```go
 package main
 import (
     "fmt"
@@ -756,9 +755,9 @@ func main() {
     fmt.Println("Отсортированные строки:", strings)
 }
 Задание: Сортировка данных
-
+```
 41. Работа с директориями
-go
+```go
 package main
 import (
     "fmt"
@@ -785,9 +784,9 @@ func main() {
     }
 }
 Задание: Работа с файловой системой
-
+```
 42. Регулярные выражения
-go
+```go
 package main
 import (
     "fmt"
@@ -807,9 +806,9 @@ func main() {
     }
 }
 Задание: Использование регулярных выражений
-
+```
 43. Шаблоны (Templates)
-go
+```go
 package main
 import (
     "os"
@@ -835,9 +834,9 @@ func main() {
     }
 }
 Задание: Использование текстовых шаблонов
-
+```
 44. Генерация случайных данных
-go
+```go
 package main
 import (
     "fmt"
@@ -862,9 +861,9 @@ func main() {
     fmt.Println("Случайный цвет:", randomColor)
 }
 Задание: Генерация случайных данных
-
+```
 45. Работа с байтами
-go
+```go
 package main
 import "fmt"
 
@@ -883,9 +882,9 @@ func main() {
     fmt.Println("После замены:", string(data))
 }
 Задание: Работа с байтовыми слайсами
-
+```
 46. Интерфейс io.Reader
-go
+```go
 package main
 import (
     "fmt"
@@ -906,9 +905,9 @@ func main() {
     }
 }
 Задание: Использование интерфейса Reader
-
+```
 47. Интерфейс io.Writer
-go
+```go
 package main
 import (
     "bytes"
@@ -927,9 +926,9 @@ func main() {
     fmt.Println("Длина буфера:", buffer.Len())
 }
 Задание: Использование интерфейса Writer
-
+```
 48. Кастомные типы
-go
+```go
 package main
 import "fmt"
 
@@ -952,9 +951,9 @@ func main() {
     fmt.Printf("%.2f°F = %.2f°C\n", tempF, tempF.ToCelsius())
 }
 Задание: Создание кастомных типов с методами
-
+```
 49. Композиция структур
-go
+```go
 package main
 import "fmt"
 
@@ -984,9 +983,9 @@ func main() {
     fmt.Println("Страна:", person.Country)
 }
 Задание: Композиция структур через встраивание
-
+```
 50. Рефлексия
-go
+```go
 package main
 import (
     "fmt"
@@ -1019,10 +1018,10 @@ func main() {
 
 да
 Продолжаю со следующими 50 примерами Go:
-
+```
 Продвинутые концепции Go
 51. Контекст (Context)
-go
+```go
 package main
 import (
     "context"
@@ -1052,9 +1051,9 @@ func main() {
     time.Sleep(time.Second)
 }
 Задание: Использование context для управления горутинами
-
+```
 52. Context с таймаутом
-go
+```go
 package main
 import (
     "context"
@@ -1075,9 +1074,9 @@ func main() {
     }
 }
 Задание: Context с автоматическим таймаутом
-
+```
 53. Sync.WaitGroup
-go
+```go
 package main
 import (
     "fmt"
@@ -1104,9 +1103,9 @@ func main() {
     fmt.Println("Все воркеры завершены")
 }
 Задание: Ожидание завершения группы горутин
-
+```
 54. Sync.Mutex
-go
+```go
 package main
 import (
     "fmt"
@@ -1142,9 +1141,9 @@ func main() {
     fmt.Println("Итоговое значение:", counter.Value())
 }
 Задание: Синхронизация доступа к общим данным
-
+```
 55. Sync.RWMutex
-go
+```go
 package main
 import (
     "fmt"
@@ -1175,7 +1174,7 @@ func main() {
     
     // Множественные одновременные чтения
     for i := 0; i < 5; i++ {
-        go func(id int) {
+        ```go func(id int) {
             fmt.Printf("Чтец %d: %s\n", id, store.Get("name"))
         }(i)
     }
@@ -1183,9 +1182,9 @@ func main() {
     time.Sleep(time.Millisecond * 100)
 }
 Задание: Оптимизированная блокировка для частого чтения
-
+```
 56. Sync.Once
-go
+```go
 package main
 import (
     "fmt"
@@ -1220,9 +1219,9 @@ func main() {
     fmt.Scanln() // Ожидание завершения горутин
 }
 Задание: Гарантия однократного выполнения кода
-
+```
 57. Sync.Pool
-go
+```go
 package main
 import (
     "fmt"
@@ -1254,9 +1253,9 @@ func main() {
     fmt.Printf("Объект 2: %d\n", obj2.ID)
 }
 Задание: Использование пула объектов для оптимизации
-
+```
 58. Каналы с контекстом
-go
+```go
 package main
 import (
     "context"
@@ -1290,9 +1289,9 @@ func main() {
     }
 }
 Задание: Управление каналами через контекст
-
+```
 59. Fan-out, Fan-in
-go
+```go
 package main
 import (
     "fmt"
@@ -1354,9 +1353,9 @@ func main() {
     }
 }
 Задание: Паттерны Fan-out и Fan-in для параллельной обработки
-
+```
 60. Атомарные операции
-go
+```go
 package main
 import (
     "fmt"
@@ -1384,9 +1383,9 @@ func main() {
     fmt.Println("Операций:", ops.Load())
 }
 Задание: Использование атомарных операций для счетчиков
-
+```
 61. Пользовательские ошибки
-go
+```go
 package main
 import (
     "errors"
@@ -1422,9 +1421,9 @@ func main() {
     }
 }
 Задание: Создание пользовательских типов ошибок
-
+```
 62. errors.Is и errors.As
-go
+```go
 package main
 import (
     "errors"
@@ -1457,9 +1456,9 @@ func main() {
     }
 }
 Задание: Современные методы проверки ошибок
-
+```
 63. Работа с временными зонами
-go
+```go
 package main
 import (
     "fmt"
@@ -1487,9 +1486,9 @@ func main() {
     fmt.Println("Распарсенное время:", parsedTime)
 }
 Задание: Работа с временными зонами
-
+```
 64. Таймеры и Ticker'ы
-go
+```go
 package main
 import (
     "fmt"
@@ -1523,9 +1522,9 @@ func main() {
     fmt.Println("Ticker остановлен")
 }
 Задание: Использование таймеров и тикеров
-
+```
 65. Шаблоны HTML
-go
+```go
 package main
 import (
     "html/template"
@@ -1577,9 +1576,9 @@ func main() {
     t.Execute(os.Stdout, data)
 }
 Задание: Генерация HTML с шаблонами
-
+```
 66. HTTP middleware
-go
+```go
 package main
 import (
     "fmt"
@@ -1624,9 +1623,9 @@ func main() {
     http.ListenAndServe(":8080", handler)
 }
 Задание: Создание HTTP middleware
-
+```
 67. WebSocket сервер
-go
+```go
 package main
 import (
     "fmt"
@@ -1671,9 +1670,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 Задание: Создание WebSocket сервера
-
+```
 68. Работа с CSV
-go
+```go
 package main
 import (
     "encoding/csv"
@@ -1736,9 +1735,9 @@ func main() {
     }
 }
 Задание: Работа с CSV файлами
-
+```
 69. Base64 кодирование
-go
+```go
 package main
 import (
     "encoding/base64"
@@ -1764,9 +1763,9 @@ func main() {
     fmt.Println("URL-закодировано:", urlEncoded)
 }
 Задание: Кодирование и декодирование Base64
-
+```
 70. Хеширование
-go
+```go
 package main
 import (
     "crypto/md5"
@@ -1796,9 +1795,9 @@ func main() {
     fmt.Printf("SHA512: %x\n", sha512Hash)
 }
 Задание: Вычисление хешей данных
-
+```
 71. Генерация UUID
-go
+```go
 package main
 import (
     "fmt"
@@ -1823,9 +1822,9 @@ func main() {
     fmt.Println("UUID v1:", idv1.String())
 }
 Задание: Генерация и работа с UUID
-
+```
 72. Флаги командной строки
-go
+```go
 package main
 import (
     "flag"
@@ -1857,9 +1856,9 @@ func main() {
     }
 }
 Задание: Обработка аргументов командной строки
-
+```
 73. Environment variables
-go
+```go
 package main
 import (
     "fmt"
@@ -1919,9 +1918,9 @@ func main() {
     fmt.Printf("Конфигурация: %+v\n", config)
 }
 Задание: Работа с переменными окружения
-
+```
 74. Logging с уровнями
-go
+```go
 package main
 import (
     "log"
@@ -1982,9 +1981,9 @@ func main() {
     logger.Error("Это ошибка")
 }
 Задание: Создание логгера с уровнями логирования
-
+```
 75. Работа с архивами
-go
+```go
 package main
 import (
     "archive/zip"
@@ -2053,9 +2052,9 @@ func main() {
     }
 }
 Задание: Создание ZIP архивов
-
+```
 76. Парсинг XML
-go
+```go
 package main
 import (
     "encoding/xml"
@@ -2098,9 +2097,9 @@ func main() {
     fmt.Printf("\nПарсинг: %+v\n", parsedPeople)
 }
 Задание: Работа с XML данными
-
+```
 77. Парсинг YAML
-go
+```go
 package main
 import (
     "fmt"
@@ -2148,9 +2147,9 @@ database:
     fmt.Println(string(outputYAML))
 }
 Задание: Работа с YAML конфигурациями
-
+```
 78. SQL база данных
-go
+```go
 package main
 import (
     "database/sql"
@@ -2222,9 +2221,9 @@ func main() {
     }
 }
 Задание: Работа с SQL базой данных
-
+```
 79. Миграции базы данных
-go
+```go
 package main
 import (
     "database/sql"
@@ -2311,9 +2310,9 @@ func main() {
     fmt.Println("Все миграции применены успешно")
 }
 Задание: Система миграций базы данных
-
+```
 80. REST API сервер
-go
+```go
 package main
 import (
     "encoding/json"
@@ -2415,9 +2414,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 Задание: Создание REST API сервера
-
+```
 81. JWT аутентификация
-go
+```go
 package main
 import (
     "fmt"
@@ -2502,9 +2501,9 @@ func main() {
     http.ListenAndServe(":8080", r)
 }
 Задание: JWT аутентификация в REST API
-
+```
 82. Graceful shutdown
-go
+```go
 package main
 import (
     "context"
@@ -2554,9 +2553,9 @@ func main() {
     fmt.Println("Сервер остановлен")
 }
 Задание: Graceful shutdown сервера
-
+```
 83. Пул соединений
-go
+```go
 package main
 import (
     "fmt"
@@ -2655,9 +2654,9 @@ func main() {
     pool.Stats()
 }
 Задание: Реализация пула соединений
-
+```
 84. Кэширование
-go
+```go
 package main
 import (
     "fmt"
@@ -2747,9 +2746,9 @@ func main() {
     }
 }
 Задание: Реализация TTL кэша
-
+```
 85. Rate limiting
-go
+```go
 package main
 import (
     "fmt"
@@ -2821,9 +2820,9 @@ func main() {
     wg.Wait()
 }
 Задание: Реализация rate limiting
-
+```
 86. Конфигурационные файлы
-go
+```go
 package main
 import (
     "encoding/json"
@@ -2923,9 +2922,9 @@ func main() {
     fmt.Printf("Загруженная конфигурация: %+v\n", config)
 }
 Задание: Работа с конфигурационными файлами
-
+```
 87. Health check
-go
+```go
 package main
 import (
     "encoding/json"
@@ -3020,9 +3019,9 @@ func main() {
     http.ListenAndServe(":8080", nil)
 }
 Задание: Система health check для мониторинга
-
+```
 88. Метрики Prometheus
-go
+```go
 package main
 import (
     "fmt"
@@ -3101,9 +3100,9 @@ func main() {
     http.ListenAndServe(":8080", mux)
 }
 Задание: Интеграция с Prometheus для сбора метрик
-
+```
 89. Трассировка (Tracing)
-go
+```go
 package main
 import (
     "context"
@@ -3188,9 +3187,9 @@ func main() {
     http.ListenAndServe(":8080", nil)
 }
 Задание: Инструментирование приложения с трассировкой
-
+```
 90. Feature flags
-go
+```go
 package main
 import (
     "encoding/json"
@@ -3304,9 +3303,9 @@ func main() {
     }
 }
 Задание: Система feature flags для управления функциональностью
-
+```
 91. Работа с большими файлами
-go
+```go
 package main
 import (
     "bufio"
@@ -3458,9 +3457,9 @@ func main() {
     }
 }
 Задание: Эффективная обработка больших файлов
-
+```
 92. Парсинг аргументов с cobra
-go
+```go
 package main
 import (
     "fmt"
@@ -3510,9 +3509,9 @@ func main() {
     }
 }
 Задание: Создание CLI приложения с cobra
-
+```
 93. Генерация документации
-go
+```go
 package main
 import "fmt"
 
@@ -3600,9 +3599,9 @@ func main() {
     fmt.Println("Фибоначчи:", calc.Fibonacci(6))
 }
 Задание: Документирование кода с примерами
-
+```
 94. Benchmark тесты
-go
+```go
 package main
 import (
     "crypto/sha256"
@@ -3680,9 +3679,9 @@ func BenchmarkSliceAccess(b *testing.B) {
 
 // Пример запуска: go test -bench=. -benchmem
 Задание: Написание benchmark тестов для измерения производительности
-
+```
 95. Table-driven тесты
-go
+```go
 package main
 import (
     "testing"
@@ -3818,9 +3817,9 @@ func TestDivide(t *testing.T) {
 
 // Пример запуска: go test -v
 Задание: Table-driven тестирование
-
+```
 96. Mock тестирование
-go
+```go
 package main
 import (
     "errors"
@@ -3954,9 +3953,9 @@ func TestUserService_CreateUser(t *testing.T) {
     }
 }
 Задание: Mock тестирование с зависимостями
-
+```
 97. Интеграционные тесты
-go
+```go
 package main
 import (
     "database/sql"
@@ -4088,9 +4087,9 @@ func TestUserRepository_Integration(t *testing.T) {
 
 // Пример запуска: go test -tags=integration
 Задание: Интеграционное тестирование с базой данных
-
+```
 98. Property-based тестирование
-go
+```go
 package main
 import (
     "testing"
@@ -4217,9 +4216,9 @@ func TestMultiplyProperties(t *testing.T) {
     properties.TestingRun(t)
 }
 Задание: Property-based тестирование
-
+```
 99. Fuzz тестирование
-go
+```go
 package main
 import (
     "testing"
@@ -4349,9 +4348,9 @@ func FuzzValidateEmail(f *testing.F) {
 
 // Пример запуска: go test -fuzz=FuzzParseInteger
 Задание: Fuzz тестирование для поиска краевых случаев
-
+```
 100. E2E тестирование
-go
+```go
 package main
 import (
     "bytes"
@@ -4519,15 +4518,10 @@ func TestE2EUserAPI(t *testing.T) {
 
 // Пример запуска: go test -v
 Задание: End-to-end тестирование API
-
-Это первые 100 примеров из 200. Хотите, чтобы я продолжил со следующими 100 примерами? Они будут охватывать еще более продвинутые темы и реальные сценарии использования.
-
-да
-Продолжаю со следующими 100 примерами Go, охватывающими продвинутые темы и реальные сценарии:
-
+```
 Продвинутые техники и реальные сценарии
 101. Graceful shutdown HTTP сервера
-go
+```go
 package main
 import (
     "context"
@@ -4591,9 +4585,9 @@ func main() {
     log.Println("Server stopped")
 }
 Задание: Полная реализация graceful shutdown для HTTP сервера
-
+```
 102. Конфигурация с Viper
-go
+```go
 package main
 import (
     "fmt"
@@ -4672,9 +4666,9 @@ func main() {
         config.Redis.DB)
 }
 Задание: Управление конфигурацией с помощью Viper
-
+```
 103. Миграции с Goose
-go
+```go
 package main
 import (
     "database/sql"
@@ -4740,9 +4734,9 @@ func main() {
     fmt.Println("Migrations applied successfully")
 }
 Задание: Управление миграциями базы данных с Goose
-
+```
 104. gRPC сервер
-go
+```go
 package main
 import (
     "context"
@@ -4813,9 +4807,9 @@ func main() {
     }
 }
 Задание: Создание gRPC сервера
-
+```
 105. gRPC клиент
-go
+```go
 package main
 import (
     "context"
@@ -4865,9 +4859,9 @@ func main() {
     log.Printf("Users: %v", listResp.Users)
 }
 Задание: Создание gRPC клиента
-
+```
 106. GraphQL сервер с gqlgen
-go
+```go
 package main
 import (
     "context"
@@ -4928,9 +4922,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 Задание: Создание GraphQL сервера с gqlgen
-
+```
 107. WebSocket чат
-go
+```go
 package main
 import (
     "log"
@@ -5056,9 +5050,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 Задание: Реализация многопользовательского WebSocket чата
-
+```
 108. OAuth2 аутентификация
-go
+```go
 package main
 import (
     "context"
@@ -5164,9 +5158,9 @@ func profileHandler(w http.ResponseWriter, r *http.Request) {
     </html>`, userInfo.ID, userInfo.Name, userInfo.Email)
 }
 Задание: Реализация OAuth2 аутентификации с Google
-
+```
 109. JWT с refresh токенами
-go
+```go
 package main
 import (
     "crypto/rand"
@@ -5319,9 +5313,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 Задание: JWT аутентификация с refresh токенами
-
+```
 110. Rate limiting с Redis
-go
+```go
 package main
 import (
     "context"
@@ -5437,9 +5431,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 Задание: Rate limiting с использованием Redis
-
+```
 111. Кэширование с Redis
-go
+```go
 package main
 import (
     "context"
@@ -5565,9 +5559,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 Задание: Кэширование данных с Redis
-
+```
 112. Message Queue с RabbitMQ
-go
+```go
 package main
 import (
     "context"
@@ -5701,9 +5695,9 @@ func main() {
     select {}
 }
 Задание: Асинхронная обработка задач с RabbitMQ
-
+```
 113. Микросервисная архитектура
-go
+```go
 package main
 import (
     "encoding/json"
@@ -5840,9 +5834,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 Задание: Простая микросервисная архитектура с API Gateway
-
+```
 114. Docker-совместимое приложение
-go
+```go
 package main
 import (
     "fmt"
@@ -5947,9 +5941,9 @@ services:
     image: redis:6-alpine
 */
 Задание: Создание Docker-совместимого приложения
-
+```
 115. Kubernetes-ready приложение
-go
+```go
 package main
 import (
     "context"
@@ -6111,9 +6105,9 @@ spec:
             cpu: "100m"
 */
 Задание: Создание Kubernetes-ready приложения
-
+```
 116. Приложение с мониторингом
-go
+```go
 package main
 import (
     "fmt"
@@ -6233,9 +6227,9 @@ func updateCustomMetrics() {
     }
 }
 Задание: Приложение с комплексным мониторингом Prometheus
-
+```
 117. Distributed tracing с Jaeger
-go
+```go
 package main
 import (
     "context"
@@ -6383,9 +6377,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", mux))
 }
 Задание: Distributed tracing с Jaeger
-
+```
 118. Feature flags с запуском в продакшн
-go
+```go
 package main
 import (
     "encoding/json"
@@ -6599,9 +6593,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 Задание: Продвинутая система feature flags
-
+```
 119. A/B тестирование
-go
+```go
 package main
 import (
     "encoding/json"
@@ -6847,9 +6841,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 Задание: Система A/B тестирования
-
+```
 120. Real-time дашборд с SSE
-go
+```go
 package main
 import (
     "encoding/json"
@@ -7073,15 +7067,10 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", r))
 }
 Задание: Real-time дашборд с Server-Sent Events
-
-Это 120 примеров из 200. Продолжить с оставшимися 80 примерами? Они будут охватывать еще более специализированные темы и продвинутые сценарии использования Go.
-
-lf
-Продолжаю с оставшимися 80 примерами, охватывающими специализированные темы Go:
-
+```
 Специализированные техники и продвинутые сценарии
 121. Работа с бинарными данными
-go
+```go
 package main
 import (
     "encoding/binary"
@@ -7131,9 +7120,9 @@ func main() {
         string(decodedPerson.Name[:]), decodedPerson.Age, decodedPerson.Height, decodedPerson.Active)
 }
 Задание: Работа с бинарными данными и сериализация структур
-
+```
 122. Bit manipulation
-go
+```go
 package main
 import (
     "fmt"
@@ -7222,9 +7211,9 @@ func main() {
     fmt.Printf("a >> 2: %08b\n", a>>2) // Right shift
 }
 Задание: Работа с битовыми операциями и битовыми множествами
-
+```
 123. Memory pool для объектов
-go
+```go
 package main
 import (
     "fmt"
@@ -7325,9 +7314,9 @@ func main() {
     pool.Stats()
 }
 Задание: Реализация пула объектов для уменьшения нагрузки на GC
-
+```
 124. Lock-free структуры данных
-go
+```go
 package main
 import (
     "fmt"
@@ -7428,9 +7417,9 @@ func main() {
     wg.Wait()
 }
 Задание: Lock-free очередь на основе атомарных операций
-
+```
 125. SIMD-подобные операции
-go
+```go
 package main
 import (
     "fmt"
@@ -7533,9 +7522,9 @@ func main() {
     fmt.Printf("First 5 scaled values: %v\n", scaled.data[:5])
 }
 Задание: Векторные операции и оптимизации циклов
-
+```
 126. Genetic algorithm
-go
+```go
 package main
 import (
     "fmt"
@@ -7730,9 +7719,9 @@ func main() {
     fmt.Printf("Fitness: %.6f\n", best.fitness)
 }
 Задание: Реализация генетического алгоритма для оптимизации
-
+```
 127. Neural network (простая реализация)
-go
+```go
 package main
 import (
     "fmt"
@@ -7907,9 +7896,9 @@ func main() {
     }
 }
 Задание: Простая реализация нейронной сети с обратным распространением ошибки
-
+```
 128. Blockchain simulation
-go
+```go
 package main
 import (
     "crypto/sha256"
@@ -8047,9 +8036,9 @@ func main() {
     fmt.Printf("Blockchain valid after tampering: %t\n", blockchain.isValid())
 }
 Задание: Симуляция простого блокчейна с proof-of-work
-
+```
 129. Game server (WebSocket)
-go
+```go
 package main
 import (
     "encoding/json"
@@ -8306,9 +8295,9 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 Задание: Многопользовательский игровой сервер на WebSocket
-
+```
 130. Image processing
-go
+```go
 package main
 import (
     "image"
@@ -8549,15 +8538,10 @@ func main() {
     fmt.Println("Image processing completed!")
 }
 Задание: Обработка изображений: фильтры, преобразования, рисование
-
-Это 130 примеров из 200. Хотите, чтобы я продолжил с оставшимися 70 примерами? Они будут охватывать такие темы как: криптография, системное программирование, сетевые протоколы, оптимизация производительности и многое другое.
-
-да
-Продолжаю с оставшимися 70 примерами, охватывающими криптографию, системное программирование и продвинутые темы:
-
+```
 Криптография и безопасность
 131. AES шифрование
-go
+```go
 package main
 import (
     "crypto/aes"
@@ -8669,9 +8653,9 @@ func main() {
     }
 }
 Задание: AES шифрование с использованием GCM режима
-
+```
 132. RSA шифрование и подписи
-go
+```go
 package main
 import (
     "crypto"
@@ -8863,9 +8847,9 @@ func main() {
         loadedPrivateKey != nil, loadedPublicKey != nil)
 }
 Задание: RSA шифрование, цифровые подписи и работа с PEM файлами
-
+```
 133. Password hashing с argon2
-go
+```go
 package main
 import (
     "crypto/rand"
@@ -9048,9 +9032,9 @@ func main() {
     fmt.Printf("Hash length: %d bytes\n", len(hash))
 }
 Задание: Безопасное хеширование паролей с Argon2
-
+```
 134. TLS сервер и клиент
-go
+```go
 package main
 import (
     "crypto/tls"
@@ -9276,10 +9260,10 @@ func testHTTPSClient() {
     fmt.Printf("HTTPS Response:\n%s\n", string(body))
 }
 Задание: TLS сервер и клиент с взаимной аутентификацией
-
+```
 Системное программирование
 135. Работа с процессами
-go
+```go
 package main
 import (
     "fmt"
@@ -9528,9 +9512,9 @@ func setupSignalHandlers() {
     }()
 }
 Задание: Управление процессами: запуск, мониторинг, сигналы
-
+```
 136. Работа с файловой системой (low-level)
-go
+```go
 package main
 import (
     "fmt"
@@ -9777,9 +9761,9 @@ func main() {
     os.Remove(sparseFile)
 }
 Задание: Низкоуровневая работа с файловой системой
-
+```
 137. System calls и raw sockets
-go
+```go
 package main
 import (
     "encoding/binary"
@@ -10038,9 +10022,9 @@ func main() {
     }
 }
 Задание: Работа с raw sockets и системными вызовами
-
+```
 138. Memory management и указатели
-go
+```go
 package main
 import (
     "fmt"
@@ -10244,9 +10228,9 @@ func main() {
     mm.ShowMemoryStats()
 }
 Задание: Управление памятью, указатели и unsafe операции
-
+```
 139. Profiling и оптимизация
-go
+```go
 package main
 import (
     "fmt"
@@ -10504,9 +10488,9 @@ func analyzePerformance() {
     }
 }
 Задание: Профилирование производительности и оптимизация кода
-
+```
 140. Cross-platform компиляция
-go
+```go
 package main
 import (
     "fmt"
@@ -10745,16 +10729,10 @@ func demoCrossPlatformFeatures() {
     wg.Wait()
 }
 Задание: Кроссплатформенная компиляция и платформо-специфичный код
-
-Это 140 примеров из 200. Хотите, чтобы я продолжил с оставшимися 60 примерами? Они будут охватывать: сетевые протоколы, базы данных NoSQL, машинное обучение, компьютерное зрение и другие продвинутые темы.
-
-This response is AI-generated, for reference only.
-да
-Продолжаю с оставшимися 60 примерами, охватывающими продвинутые темы:
-
+```
 Сетевые протоколы и распределенные системы
 141. DNS клиент и сервер
-go
+```go
 package main
 import (
     "fmt"
@@ -10910,9 +10888,9 @@ func (ds *DNSServer) handleQuery(conn *net.UDPConn, addr *net.UDPAddr, data []by
     }
 }
 Задание: DNS клиент с различными типами запросов и простой DNS сервер
-
+```
 142. FTP клиент
-go
+```go
 package main
 import (
     "bufio"
@@ -11113,9 +11091,9 @@ func main() {
     client.Quit()
 }
 Задание: FTP клиент с поддержкой основных команд
-
+```
 143. SMTP клиент для отправки email
-go
+```go
 package main
 import (
     "crypto/tls"
@@ -11335,9 +11313,9 @@ func main() {
     }
 }
 Задание: SMTP клиент для отправки email с поддержкой TLS и HTML
-
+```
 144. Web crawler
-go
+```go
 package main
 import (
     "fmt"
@@ -11590,9 +11568,9 @@ func main() {
     fmt.Printf("Average links per page: %.2f\n", float64(totalLinks)/float64(len(pages)))
 }
 Задание: Веб-краулер с рекурсивным обходом и генерацией sitemap
-
+```
 145. Distributed key-value store
-go
+```go
 package main
 import (
     "encoding/json"
@@ -11879,9 +11857,9 @@ func main() {
     select {}
 }
 Задание: Распределенное key-value хранилище с RPC
-
+```
 146. Real-time collaboration сервер
-go
+```go
 package main
 import (
     "encoding/json"
@@ -12170,15 +12148,10 @@ func main() {
     log.Fatal(http.ListenAndServe(":8080", nil))
 }
 Задание: Real-time collaboration сервер для совместного редактирования документов
-
-Это 146 примеров из 200. Продолжить с оставшимися 54 примерами? Они будут охватывать машинное обучение, компьютерное зрение, обработку естественного языка и другие AI-тематики.
-
-да
-Продолжаю с оставшимися 54 примерами, охватывающими AI и машинное обучение:
-
+```
 Машинное обучение и AI
 147. Линейная регрессия
-go
+```go
 package main
 import (
     "fmt"
@@ -12333,9 +12306,9 @@ func main() {
     fmt.Printf("\nPrediction for %v: %.2f\n", newSample, prediction)
 }
 Задание: Реализация линейной регрессии с градиентным спуском
-
+```
 148. K-ближайших соседей (KNN)
-go
+```go
 package main
 import (
     "fmt"
@@ -12506,9 +12479,9 @@ func main() {
     }
 }
 Задание: Алгоритм K-ближайших соседей для классификации
-
+```
 149. Дерево решений
-go
+```go
 package main
 import (
     "fmt"
@@ -12792,9 +12765,9 @@ func main() {
     fmt.Printf("\nTraining accuracy: %.2f%%\n", accuracy*100)
 }
 Задание: Дерево решений для классификации с использованием Information Gain
-
+```
 150. K-средних (K-means) кластеризация
-go
+```go
 package main
 import (
     "fmt"
@@ -13129,9 +13102,9 @@ func (km *KMeans) Visualize(width, height int) {
     }
 }
 Задание: Алгоритм K-средних для кластеризации с методом локтя
-
+```
 151. Обработка естественного языка (NLP) - базовые методы
-go
+```go
 package main
 import (
     "fmt"
@@ -13498,9 +13471,9 @@ func main() {
     }
 }
 Задание: Базовые методы NLP: обработка текста, TF-IDF, наивный Байес
-
+```
 152. Компьютерное зрение - базовые фильтры
-go
+```go
 package main
 import (
     "fmt"
@@ -13858,15 +13831,10 @@ func main() {
     fmt.Println("\nAll image processing operations completed!")
 }
 Задание: Базовые операции компьютерного зрения: фильтры, детекция краев
-
-Это 152 примера из 200. Хотите, чтобы я продолжил с оставшимися 48 примерами? Они будут охватывать: глубокое обучение, reinforcement learning, обработку аудио, криптовалюты и другие продвинутые темы.
-
-да
-Продолжаю с оставшимися 48 примерами, охватывающими глубокое обучение и другие продвинутые темы:
-
+```
 Глубокое обучение и нейронные сети
 153. Полносвязная нейронная сеть
-go
+```go
 package main
 import (
     "fmt"
@@ -14066,9 +14034,9 @@ func main() {
     }
 }
 Задание: Полносвязная нейронная сеть с обратным распространением ошибки
-
+```
 154. Сверточная нейронная сеть (CNN)
-go
+```go
 package main
 import (
     "fmt"
@@ -14358,9 +14326,9 @@ func main() {
         predictedClass, maxProb*100)
 }
 Задание: Сверточная нейронная сеть для классификации изображений
-
+```
 155. Рекуррентная нейронная сеть (RNN)
-go
+```go
 package main
 import (
     "fmt"
@@ -14672,9 +14640,9 @@ func main() {
     }
 }
 Задание: Рекуррентная нейронная сеть для предсказания временных рядов
-
+```
 156. Генеративно-состязательная сеть (GAN)
-go
+```go
 package main
 import (
     "fmt"
@@ -14962,9 +14930,9 @@ func main() {
     fmt.Printf("Std:  (%.3f, %.3f)\n", stdX, stdY)
 }
 Задание: Генеративно-состязательная сеть для создания синтетических данных
-
+```
 157. Reinforcement Learning - Q-learning
-go
+```go
 package main
 import (
     "fmt"
@@ -15281,15 +15249,10 @@ func main() {
     }
 }
 Задание: Q-learning для reinforcement learning с ε-greedy стратегией
-
-Это 157 примеров из 200. Хотите, чтобы я продолжил с оставшимися 43 примерами? Они будут охватывать: обработку аудио, криптовалюты, IoT, квантовые вычисления и другие cutting-edge технологии.
-
-продолжай
-Продолжаю с оставшимися 43 примерами, охватывающими передовые технологии:
-
+```
 Обработка аудио и мультимедиа
 158. Аудио обработка - генерация и анализ звука
-go
+```go
 package main
 import (
     "encoding/binary"
@@ -15601,9 +15564,9 @@ func main() {
     fmt.Printf("Chord fundamental frequency: %.2f Hz\n", chordFundamental)
 }
 Задание: Генерация и анализ аудио сигналов с FFT
-
+```
 159. Криптовалютный кошелек и транзакции
-go
+```go
 package main
 import (
     "crypto/ecdsa"
@@ -15953,9 +15916,9 @@ func main() {
     }
 }
 Задание: Криптовалютный кошелек и простой блокчейн с Proof of Work
-
+```
 160. IoT устройство - симуляция умного дома
-go
+```go
 package main
 import (
     "encoding/json"
@@ -16285,9 +16248,9 @@ func main() {
     }
 }
 Задание: IoT платформа для умного дома с автоматизацией и REST API
-
+```
 161. Квантовые вычисления - симуляция кубитов
-go
+```go
 package main
 import (
     "fmt"
@@ -16607,16 +16570,10 @@ func main() {
     }
 }
 Задание: Симулятор квантовых вычислений с кубитами и гейтами
-
-Это 161 пример из 200. Хотите, чтобы я продолжил с оставшимися 39 примерами? Они будут охватывать: компьютерную графику, робототехнику, биоинформатику, квантовое машинное обучение и другие экзотические темы.
-
-This response is AI-generated, for reference only.
-да, продолжай
-Продолжаю с оставшимися 39 примерами, охватывающими передовые и экзотические темы:
-
+```
 Компьютерная графика и рендеринг
 162. 3D рендеринг - программный растеризатор
-go
+```go
 package main
 import (
     "fmt"
@@ -16954,9 +16911,9 @@ func max(a, b, c int) int {
     return int(math.Max(float64(a), math.Max(float64(b), float64(c))))
 }
 Задание: Программный 3D рендерер с растеризацией треугольников и z-буферингом
-
+```
 163. Робототехника - симулятор движения робота
-go
+```go
 package main
 import (
     "fmt"
@@ -17301,3 +17258,4 @@ func main() {
     }
 }
 Задание: Симулятор робота с дифференциальным приводом, лидаром и ПИД-регулятором
+```
